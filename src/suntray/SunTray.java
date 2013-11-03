@@ -38,28 +38,14 @@ public class SunTray {
 	private MenuItem tomDelt;
 	
 	
-	//Dev
-    //private Image sun  = Toolkit.getDefaultToolkit().createImage("src/suntray/img/sun-icon-md.png");
-    //private Image moon = Toolkit.getDefaultToolkit().createImage("src/suntray/img/full-moon-icon-md.png");
-	
-	//Prod
-	//Resource Based
 	private Image sun = Toolkit.getDefaultToolkit().getImage(getClass().getResource("sun-icon-md.png"));
 	private Image moon = Toolkit.getDefaultToolkit().getImage(getClass().getResource("full-moon-icon-md.png"));
-    //private Image sun   = Toolkit.getDefaultToolkit().createImage("./img/sun-icon-md.png");
-	//private Image moon  = Toolkit.getDefaultToolkit().createImage("./img/full-moon-icon-md.png");
 
 	
 	private TrayIcon trayIcon;
 	private static Timer pulse;
 
 
-	
-	/**
-	 * @param args
-	 * @throws AWTException 
-	 * @throws ParseException 
-	 */
 	public static void main(String[] args) throws AWTException, ParseException {
 
 		// TODO Auto-generated method stub
@@ -241,9 +227,20 @@ public class SunTray {
 		
 		return true;
 	}
+	
+	public boolean hasSunRisen() {
+		long millisToRise = (System.currentTimeMillis()-sunriseTime.getTime());
+		
+		//MillisToRise is positive if time is after sunrise. 
+		if(millisToRise < -1) {
+			return false; 
+		}
+		
+		return true;
+	}
 
 	private void chkIcon() {
-		if(hasSunSet()) {
+		if(hasSunSet() || !hasSunRisen()) {
 			trayIcon.setImage(moon);
 		} else {
 			trayIcon.setImage(sun);

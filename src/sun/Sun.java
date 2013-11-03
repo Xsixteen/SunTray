@@ -6,6 +6,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.TimeZone;
 
 //Based off of: http://williams.best.vwh.net/sunrise_sunset_algorithm.htm
 //Validated against: http://williams.best.vwh.net/sunrise_sunset_example.htm
@@ -22,7 +23,7 @@ public class Sun {
 	private Date sunset_time;
 	private Date sunrise_time;
 	private double zenith = 90.833;
-	private int offset = - 4;
+	private int offset = - 4; // 5 for DST TODO: Write DST checking function and handle appropriately.
 	private int day, month, year;
 	private double longitude, latitude;
 	
@@ -38,6 +39,11 @@ public class Sun {
 	public Sun(double lat, double lon) {
 		latitude = lat;
 		longitude = lon;
+		
+		if(!TimeZone.getDefault().inDaylightTime( new Date() )) {
+			offset = offset -1 ;
+		} 
+
 	}
 	
 	public void setDate(int d, int m, int y) {
