@@ -5,6 +5,7 @@ import java.io.Console;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.TimeZone;
 
@@ -44,6 +45,15 @@ public class Sun {
 			offset = offset -1 ;
 		} 
 
+	}
+	
+	public Sun(Location location) {
+		latitude = location.getLatitude();
+		longitude = location.getLongitude();
+		
+		if(!TimeZone.getDefault().inDaylightTime( new Date() )) {
+			offset = offset -1 ;
+		} 
 	}
 	
 	public void setDate(int d, int m, int y) {
@@ -107,7 +117,6 @@ public class Sun {
 		try {
 			sunset_time  = df.parse(sunsetHour+":"+sunsetMinute+":"+sunsetSecond);
 			sunrise_time = df.parse(sunriseHour+":"+sunriseMinute+":"+sunriseSecond);
-
 		} catch (ParseException e) {
 			// TODO Auto-generated catch block
 			System.out.println ("BAD DATE DATA");
@@ -148,6 +157,28 @@ public class Sun {
 	
 	public Date getSunrise() {
 		return sunrise_time;
+	}
+	
+	public Calendar getSunsetCalendar() {
+		Calendar calSunset	 = Calendar.getInstance(); 
+		
+		calSunset.setTime(sunset_time); 
+		calSunset.set(Calendar.YEAR, year);
+		calSunset.set(Calendar.DAY_OF_MONTH, day);
+		calSunset.set(Calendar.MONTH, month);
+		
+		return calSunset;
+	}
+	
+	public Calendar getSunriseCalendar() {
+		Calendar calSunset	 = Calendar.getInstance(); 
+		
+		calSunset.setTime(sunrise_time); 
+		calSunset.set(Calendar.YEAR, year);
+		calSunset.set(Calendar.DAY_OF_MONTH, day);
+		calSunset.set(Calendar.MONTH, month);
+		
+		return calSunset;
 	}
 	
 	public void printSunset() {

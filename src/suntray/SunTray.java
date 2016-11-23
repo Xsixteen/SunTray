@@ -1,9 +1,7 @@
 package suntray;
 
 import java.awt.AWTException;
-import java.awt.CheckboxMenuItem;
 import java.awt.Image;
-import java.awt.Menu;
 import java.awt.MenuItem;
 import java.awt.PopupMenu;
 import java.awt.SystemTray;
@@ -12,7 +10,6 @@ import java.awt.TrayIcon;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-import java.net.URL;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -21,38 +18,48 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 
-import javax.swing.ImageIcon;
 import javax.swing.Timer;
 
+import sun.Location;
 import sun.Sun;
 
 public class SunTray {
 	
-	private static Sun s;
+	//private static Sun s;
 	private java.util.Date sunsetTime;
 	private java.util.Date sunriseTime;
 
+	private Sun currentSun;
+	private Sun futureSun;
 	private MenuItem sunset;
 	private MenuItem sunrise;
 	private MenuItem timeTo;
 	private MenuItem tomDelt;
+	private MenuItem dayLen;
+	private MenuItem ttSummer;
+	private MenuItem ttWinter;
+	private MenuItem ttFall;
+	private MenuItem ttSpring;
+	private MenuItem maxDay;
+	private MenuItem minDay;
+
 	
-	
-	private Image sun = Toolkit.getDefaultToolkit().getImage(getClass().getResource("sun-icon-md.png"));
-	private Image moon = Toolkit.getDefaultToolkit().getImage(getClass().getResource("full-moon-icon-md.png"));
+	private Image sunIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getResource("sun-icon-md.png"));
+	private Image moonIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getResource("full-moon-icon-md.png"));
 
 	
 	private TrayIcon trayIcon;
 	private static Timer pulse;
 
+	private static String version = "v0.12";
 
 	public static void main(String[] args) throws AWTException, ParseException {
-
+		Location clintonTwp = new Location(42.5869, -82.9200);
 		// TODO Auto-generated method stub
-		s = new Sun(42.5869, -82.9200);
+		//s = new Sun(42.5869, -82.9200);
 	//	s.setDate(13, 10, 2013);
 		
-		final SunTray h = new SunTray();
+		final SunTray h = new SunTray(clintonTwp);
 		h.doUpdate();
 	
         
@@ -71,8 +78,10 @@ public class SunTray {
 	
 	}
 	
-	public SunTray() {
-		
+	public SunTray(Location location) {
+		this.currentSun = new Sun(location);
+		this.futureSun  = new Sun(location);
+				
 	      //Check the SystemTray is supported
         if (!SystemTray.isSupported()) {
             System.out.println("SystemTray is not supported");
@@ -80,7 +89,7 @@ public class SunTray {
         }
         final PopupMenu popup = new PopupMenu();
         Image i  = Toolkit.getDefaultToolkit().createImage("src/suntray/sun-icon-md.png");
-        trayIcon = new TrayIcon(sun,"tray icon");
+        trayIcon = new TrayIcon(sunIcon,"tray icon");
         final SystemTray tray = SystemTray.getSystemTray();
        
         // Create a pop-up menu components
@@ -92,7 +101,20 @@ public class SunTray {
         timeTo.setEnabled(false);
         tomDelt = new MenuItem("Tomorrow change: ");
         tomDelt.setEnabled(false);
-       
+        dayLen = new MenuItem("Today's Day Length: ");
+        dayLen.setEnabled(false);
+        ttWinter = new MenuItem("Days until Summer Solstice: ");
+        ttWinter.setEnabled(false);
+        ttSummer = new MenuItem("Days until Winter Solstice: ");
+        ttSummer.setEnabled(false);
+        ttFall = new MenuItem("Days until Fall Equinox: ");
+        ttFall.setEnabled(false);
+        ttSpring = new MenuItem("Days until Spring Equinox: ");
+        ttSpring.setEnabled(false);
+        maxDay = new MenuItem("Maximum Day Length: ");
+        maxDay.setEnabled(false);
+        minDay = new MenuItem("Minimum Day Length: ");
+        minDay.setEnabled(false);
         MenuItem exitItem = new MenuItem("Exit");
         exitItem.addActionListener(new ActionListener() {
         	public void actionPerformed(ActionEvent arg0) {
@@ -104,9 +126,18 @@ public class SunTray {
         //Add components to pop-up menu
         popup.add(sunset);
         popup.add(sunrise);
+        popup.add(dayLen);
         popup.addSeparator();
         popup.add(timeTo);
         popup.add(tomDelt);
+        popup.addSeparator();
+        popup.add(ttWinter);
+        popup.add(ttSpring);
+        popup.add(ttSummer);
+        popup.add(ttFall);
+        popup.addSeparator();
+        popup.add(maxDay);
+        popup.add(minDay);
         popup.addSeparator();
         popup.add(exitItem);
        
@@ -122,20 +153,54 @@ public class SunTray {
 	}
 	
 	@SuppressWarnings("deprecation")
-	public void curSunDate() throws ParseException {
+	public void currentSunDate() throws ParseException {
 		Date cur = new Date();
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(cur);
 		
-		s.setDate(cur.getDate(), cur.getMonth() + 1, cur.getYear());
-		s.calculate();
-
+		currentSun.setDate(cur.getDate(), cur.getMonth() + 1, cal.get(Calendar.YEAR));
+		currentSun.calculate();
+		
+	}
+	
+	public void calculateMaxMins() throws ParseException {	
+		
+		Calendar calSunset	 = Calendar.getInstance(); 
+		Calendar calSunrise  = Calendar.getInstance(); 
+	
+		
+		Date cur = new Date();
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(cur);
+		futureSun.setDate(21, 6, cal.get(Calendar.YEAR));
+		futureSun.calculate();
+		
+		calSunset.setTime(futureSun.getSunset()); 
+		calSunset.set(Calendar.YEAR, 2016);
+		calSunset.set(Calendar.DAY_OF_MONTH, 21);
+		calSunset.set(Calendar.MONTH, 21);
+		calSunrise.setTime(futureSun.getSunrise());
+		calSunrise.set(Calendar.YEAR, 2016);
+		calSunrise.set(Calendar.DAY_OF_MONTH, 21);
+		calSunrise.set(Calendar.MONTH, 21);
+		
+		genericDayLength(calSunset.getTime(), calSunrise.getTime(), maxDay, "Maximum Day Length: " );
+		
+		futureSun.setDate(21, 12, cal.get(Calendar.YEAR));
+		futureSun.calculate();
+		genericDayLength(futureSun.getSunset(), futureSun.getSunrise(), minDay, "Minimum Day Length: " );
+		
 	}
 	
 	public void doUpdate() throws ParseException {
-		curSunDate();
-		setTime(s.getSunset(), s.getSunrise());
-		deltTime();
-		tomDeltTime();
-        chkIcon();
+		currentSunDate();
+		setTime(currentSun.getSunset(), currentSun.getSunrise());
+		deltaTime();
+		tommorrowDeltaTime();
+		dayLength(currentSun.getSunset(), currentSun.getSunrise());
+        checkIcon();
+        daysUntilEvent();
+        calculateMaxMins();
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -156,14 +221,14 @@ public class SunTray {
 		
 		if(hasSunSet()) {
 			sunset.setLabel("Sunset occured at: " + df.format(d));
-			tomSunRise();
+			tomorrowSunRise();
 		} else {
 			sunrise.setLabel("Sunrise: " + df.format(r));
 			sunset.setLabel("Sunset: " + df.format(d));
 		}
 	}
 	
-	public void tomDeltTime() throws ParseException {
+	public void tommorrowDeltaTime() throws ParseException {
 		Sun tomsun = new Sun(42.5869, -82.9200);
 
 		Date cur = new Date();
@@ -178,9 +243,9 @@ public class SunTray {
 		tomsun.setDate(cur.getDate(), cur.getMonth() + 1, cur.getYear());
 		tomsun.calculate();
 	
-		todaySunset = s.getSunset();
+		todaySunset = currentSun.getSunset();
 		tomSunset = tomsun.getSunset();
-		todaySunrise = s.getSunrise();
+		todaySunrise = currentSun.getSunrise();
 		tomSunrise = tomsun.getSunrise();
 		
 		millisSunset  = (tomSunset.getTime() - todaySunset.getTime());
@@ -190,7 +255,7 @@ public class SunTray {
 		tomDelt.setLabel("Tomorrow Time Delta: " + (TimeUnit.MILLISECONDS.toMinutes(millis) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(millis))) + " min and " + (TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis))) + " sec");
 	}
 	
-	public void tomSunRise() throws ParseException {
+	public void tomorrowSunRise() throws ParseException {
 		DateFormat df = new SimpleDateFormat("hh:mma");
 		Sun temp = new Sun(42.5869, -82.9200);
 		Date cur = new Date();
@@ -206,7 +271,7 @@ public class SunTray {
 		sunrise.setLabel("Tomorrow's Sunrise: " + df.format(temp.getSunrise()));
 	}
 	
-	public void deltTime() {
+	public void deltaTime() {
 		DateFormat df = new SimpleDateFormat("hh:mm");
 		long millisToSet = (sunsetTime.getTime()-System.currentTimeMillis());
 		if(hasSunSet()) {
@@ -214,6 +279,84 @@ public class SunTray {
 		} else {
 			timeTo.setLabel("Time until Sunset: " + TimeUnit.MILLISECONDS.toHours(millisToSet) + " hour and " + (TimeUnit.MILLISECONDS.toMinutes(millisToSet) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(millisToSet))) + " minutes");
 		} 
+	}
+	
+	public void dayLength(java.util.Date sunset, java.util.Date sunrise) {
+		long milliseconds = (sunset.getTime() - sunrise.getTime());
+		dayLen.setLabel("Today's Day Length: " + TimeUnit.MILLISECONDS.toHours(milliseconds) + " hours and " + (TimeUnit.MILLISECONDS.toMinutes(milliseconds) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(milliseconds))) + " minutes");
+	}
+	
+	public void genericDayLength(java.util.Date sunset, java.util.Date sunrise, MenuItem menuItem, String label) {
+	
+		
+		long milliseconds = (sunset.getTime() - sunrise.getTime());
+		 
+		menuItem.setLabel(label + TimeUnit.MILLISECONDS.toHours(milliseconds) + " hours and " + (TimeUnit.MILLISECONDS.toMinutes(milliseconds) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(milliseconds))) + " minutes");
+	}
+	
+	
+	public void daysUntilEvent() {
+		Calendar cal		= Calendar.getInstance();
+		final String summer = "21-06-";
+		final String winter = "21-12-";
+		final String spring = "21-03-";
+		final String fall	= "21-09-";
+
+		String year	 		= new SimpleDateFormat("yyyy").format(cal.getTime());
+		cal.add(Calendar.YEAR, 1); 
+		String yearPlusOne  = new SimpleDateFormat("yyyy").format(cal.getTime()); 
+
+
+		String today  		= new SimpleDateFormat("dd-MM-yyyy").format(Calendar.getInstance().getTime());
+
+		
+	    try {
+	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(spring+year))
+	    		ttSpring.setLabel("Days until Spring Equinox: " + this.numberOfDaysBetween(today, spring+year) + " Days");
+	    	else
+	    		ttSpring.setLabel("Days until Spring Equinox: " + this.numberOfDaysBetween(today, spring+yearPlusOne) + " Days");
+	    	
+	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(summer+year))
+	    		ttSummer.setLabel("Days until Summer Solstice: " + this.numberOfDaysBetween(today, summer+year) + " Days");
+	    	else
+	    		ttSummer.setLabel("Days until Summer Solstice: " + this.numberOfDaysBetween(today, summer+yearPlusOne) + " Days");
+	    	
+	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(fall+year))
+	    		ttFall.setLabel("Days until Fall Equinox: " + this.numberOfDaysBetween(today, fall+year) + " Days");
+	    	else
+	    		ttFall.setLabel("Days until Fall Equinox: " + this.numberOfDaysBetween(today, fall+yearPlusOne) + " Days");
+	    	
+	    	
+	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(winter+year))
+	    		ttWinter.setLabel("Days until Winter Solstice: " + this.numberOfDaysBetween(today, winter+year) + " Days");
+	    	else
+	    		ttWinter.setLabel("Days until Winter Solstice: " + this.numberOfDaysBetween(today, winter+yearPlusOne) + " Days");
+
+		} catch (ParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+
+	}
+	
+//=========PRIVATE Methods
+	private long numberOfDaysBetween(String inputDate1, String inputDate2) throws ParseException {
+		SimpleDateFormat myFormat = new SimpleDateFormat("dd-MM-yyyy");
+	    Date date1 = myFormat.parse(inputDate1);
+	    Date date2 = myFormat.parse(inputDate2);
+	    long diff  = date2.getTime() - date1.getTime();
+	    long days  = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
+	    
+	    return days;
+	}
+	
+	private long convertDateToTimeFormat(String inputDate1) throws ParseException {
+		SimpleDateFormat myFormat = new SimpleDateFormat("dd-MM-yyyy");
+	    Date date1 = myFormat.parse(inputDate1);
+	    long millis  = date1.getTime();
+	    
+	    return millis;
 	}
 	
 	public boolean hasSunSet() {
@@ -239,11 +382,11 @@ public class SunTray {
 		return true;
 	}
 
-	private void chkIcon() {
+	private void checkIcon() {
 		if(hasSunSet() || !hasSunRisen()) {
-			trayIcon.setImage(moon);
+			trayIcon.setImage(moonIcon);
 		} else {
-			trayIcon.setImage(sun);
+			trayIcon.setImage(sunIcon);
 		}
 	
 	}
