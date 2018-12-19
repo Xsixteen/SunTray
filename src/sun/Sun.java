@@ -40,20 +40,13 @@ public class Sun {
 	public Sun(double lat, double lon) {
 		latitude = lat;
 		longitude = lon;
-		
-		if(!TimeZone.getDefault().inDaylightTime( new Date() )) {
-			offset = offset -1 ;
-		} 
+
 
 	}
 	
 	public Sun(Location location) {
 		latitude = location.getLatitude();
 		longitude = location.getLongitude();
-		
-		if(!TimeZone.getDefault().inDaylightTime( new Date() )) {
-			offset = offset -1 ;
-		} 
 	}
 	
 	public void setDate(int d, int m, int y) {
@@ -68,6 +61,12 @@ public class Sun {
 		double meanA, latToHour, trueLong, RA, localHour, meanTime, utc, sunset;
 		double SRmeanA, SRlatToHour, SRtrueLong, SRRA, SRlocalHour, SRmeanTime, SRutc, sunrise;
 		DateFormat df, display;
+		int calculateOffset;
+		if(!TimeZone.getDefault().inDaylightTime( new Date() )) {
+		    calculateOffset = offset -1 ;
+		} else {
+		    calculateOffset = offset;
+		}
 		
 		//CTP Lat/long
 	    //latitude = 42.5869;
@@ -100,8 +99,8 @@ public class Sun {
 		utc   = convToUTC(meanTime);
 		SRutc = convToUTC(SRmeanTime);
 		
-		sunset  = utc + offset;
-		sunrise = SRutc + offset;
+		sunset  = utc + calculateOffset;
+		sunrise = SRutc + calculateOffset;
 		
 		sunsetHour   = (int) sunset;
 		sunsetMinute = (int) ((sunset - sunsetHour) * 60);
@@ -165,7 +164,7 @@ public class Sun {
 		calSunset.setTime(sunset_time); 
 		calSunset.set(Calendar.YEAR, year);
 		calSunset.set(Calendar.DAY_OF_MONTH, day);
-		calSunset.set(Calendar.MONTH, month);
+		calSunset.set(Calendar.MONTH, month-1);
 		
 		return calSunset;
 	}
@@ -176,7 +175,7 @@ public class Sun {
 		calSunset.setTime(sunrise_time); 
 		calSunset.set(Calendar.YEAR, year);
 		calSunset.set(Calendar.DAY_OF_MONTH, day);
-		calSunset.set(Calendar.MONTH, month);
+		calSunset.set(Calendar.MONTH, month-1);
 		
 		return calSunset;
 	}

@@ -50,20 +50,17 @@ public class SunTray {
 	
 	private TrayIcon trayIcon;
 	private static Timer pulse;
-
-	private static String version = "v0.12";
-
+	private Location currentLocation;
+	private static String version              = "v0.13";
+	private static Integer CONST_TIMER_MS      = 5*60000;
 	public static void main(String[] args) throws AWTException, ParseException {
 		Location clintonTwp = new Location(42.5869, -82.9200);
-		// TODO Auto-generated method stub
-		//s = new Sun(42.5869, -82.9200);
-	//	s.setDate(13, 10, 2013);
 		
 		final SunTray h = new SunTray(clintonTwp);
 		h.doUpdate();
 	
         
-        pulse = new Timer(60000, new ActionListener() {
+        pulse = new Timer(CONST_TIMER_MS, new ActionListener() {
         	   public void actionPerformed(ActionEvent evt) {
         		   	try {
 						h.doUpdate();
@@ -79,8 +76,9 @@ public class SunTray {
 	}
 	
 	public SunTray(Location location) {
-		this.currentSun = new Sun(location);
-		this.futureSun  = new Sun(location);
+	    this.currentLocation = location;
+		this.currentSun      = new Sun(this.currentLocation);
+		this.futureSun       = new Sun(this.currentLocation);
 				
 	      //Check the SystemTray is supported
         if (!SystemTray.isSupported()) {
@@ -193,6 +191,9 @@ public class SunTray {
 	}
 	
 	public void doUpdate() throws ParseException {
+	    this.currentSun = new Sun(this.currentLocation);
+	    this.futureSun  = new Sun(this.currentLocation);
+	    
 		currentSunDate();
 		setTime(currentSun.getSunset(), currentSun.getSunrise());
 		deltaTime();
@@ -240,19 +241,20 @@ public class SunTray {
 		c.add(Calendar.DATE, 1);
 		cur = c.getTime();
 		
-		tomsun.setDate(cur.getDate(), cur.getMonth() + 1, cur.getYear());
+		tomsun.setDate(cur.getDate(), cur.getMonth()+1, c.get(Calendar.YEAR));
 		tomsun.calculate();
 	
-		todaySunset = currentSun.getSunset();
-		tomSunset = tomsun.getSunset();
-		todaySunrise = currentSun.getSunrise();
-		tomSunrise = tomsun.getSunrise();
+		todaySunset = currentSun.getSunsetCalendar().getTime();
+		tomSunset = tomsun.getSunsetCalendar().getTime();
 		
-		millisSunset  = (tomSunset.getTime() - todaySunset.getTime());
-		millisSunrise = (todaySunrise.getTime() - tomSunrise.getTime());
-		millis = millisSunset + millisSunrise;
-		
-		tomDelt.setLabel("Tomorrow Time Delta: " + (TimeUnit.MILLISECONDS.toMinutes(millis) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(millis))) + " min and " + (TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis))) + " sec");
+		todaySunrise = currentSun.getSunriseCalendar().getTime();
+		tomSunrise = tomsun.getSunriseCalendar().getTime();
+	
+		long todayDuration    = todaySunset.getTime() - todaySunrise.getTime();
+		long tomorrowDuration = tomSunset.getTime() - tomSunrise.getTime();
+
+		long delta = tomorrowDuration - todayDuration;
+	    tomDelt.setLabel("Tomorrow Time Delta: " +TimeUnit.MILLISECONDS.toMinutes(delta) + " min and " + (TimeUnit.MILLISECONDS.toSeconds(delta) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(delta))) + " sec");
 	}
 	
 	public void tomorrowSunRise() throws ParseException {

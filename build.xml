@@ -21,7 +21,9 @@
     <property name="dir.jarfile" value="${dir.buildfile}/dist"/>
     
      <target name="bundle-SunTray">
-        <jar destfile="${dir.jarfile}/SunTray.jar" filesetmanifest="mergewithoutmain">
+     	<echo message="JAVA_HOME is set to = ${env.JAVA_HOME}" />
+
+     	<jar destfile="${dir.jarfile}/SunTray.jar" filesetmanifest="mergewithoutmain">
                 <manifest>
                     <attribute name="Main-Class" value="suntray.SunTray"/>
                     <attribute name="Class-Path" value="."/>
