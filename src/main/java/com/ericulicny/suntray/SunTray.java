@@ -44,8 +44,8 @@ public class SunTray {
 	private MenuItem minDay;
 
 	
-	private Image sunIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getResource("sun-icon-md.png"));
-	private Image moonIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getResource("full-moon-icon-md.png"));
+	private Image sunIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("sun-icon-md.png"));
+	private Image moonIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("full-moon-icon-md.png"));
 
 	
 	private TrayIcon trayIcon;
