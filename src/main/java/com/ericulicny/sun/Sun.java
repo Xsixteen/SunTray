@@ -1,4 +1,6 @@
-package sun;
+package com.ericulicny.sun;
+
+import sun.Location;
 
 import java.awt.AWTException;
 import java.io.Console;
