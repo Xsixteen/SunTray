@@ -62,7 +62,8 @@ public class WeatherService {
     }
 
     private Long convKtoF(Double kelvin) {
-        return (Math.round(kelvin - 273.15) * (9/5) + 32);
+        Double tempC = (kelvin - 273.15) * 9/5 + 32;
+        return (Math.round(tempC));
     }
 
     private Double windMetertoMph(Double windSpeed) {
