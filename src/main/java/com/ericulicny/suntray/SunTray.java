@@ -1,4 +1,4 @@
-package suntray;
+package com.ericulicny.suntray;
 
 import java.awt.AWTException;
 import java.awt.Image;
@@ -20,8 +20,10 @@ import java.util.concurrent.TimeUnit;
 
 import javax.swing.Timer;
 
+import com.ericulicny.domain.Weather;
+import com.ericulicny.weather.WeatherService;
 import sun.Location;
-import sun.Sun;
+import com.ericulicny.sun.Sun;
 
 public class SunTray {
 	
@@ -42,8 +44,12 @@ public class SunTray {
 	private MenuItem ttSpring;
 	private MenuItem maxDay;
 	private MenuItem minDay;
+	private MenuItem currentTemp;
+	private MenuItem maxTemp;
+	private MenuItem minTemp;
+	private MenuItem curretConditions;
 
-	
+
 	private Image sunIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("sun-icon-md.png"));
 	private Image moonIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("full-moon-icon-md.png"));
 
@@ -53,6 +59,11 @@ public class SunTray {
 	private Location currentLocation;
 	private static String version              = "v0.13";
 	private static Integer CONST_TIMER_MS      = 5*60000;
+
+	private WeatherService weatherService 	   = new WeatherService();
+
+	private String weatherAPIKey			   = "647f8fa8c4890ee185692dc94807a4a0";
+
 	public static void main(String[] args) throws AWTException, ParseException {
 		Location clintonTwp = new Location(42.5869, -82.9200);
 		
@@ -113,6 +124,15 @@ public class SunTray {
         maxDay.setEnabled(false);
         minDay = new MenuItem("Minimum Day Length: ");
         minDay.setEnabled(false);
+
+		curretConditions = new MenuItem("Current Weather: ");
+		curretConditions.setEnabled(false);
+		currentTemp = new MenuItem("Current Temp: ");
+		currentTemp.setEnabled(false);
+		maxTemp = new MenuItem("High Temp: ");
+		maxTemp.setEnabled(false);
+		minTemp = new MenuItem("Low Temp: ");
+		minTemp.setEnabled(false);
         MenuItem exitItem = new MenuItem("Exit");
         exitItem.addActionListener(new ActionListener() {
         	public void actionPerformed(ActionEvent arg0) {
@@ -137,6 +157,11 @@ public class SunTray {
         popup.add(maxDay);
         popup.add(minDay);
         popup.addSeparator();
+        popup.add(curretConditions);
+		popup.add(currentTemp);
+		popup.add(maxTemp);
+		popup.add(minTemp);
+		popup.addSeparator();
         popup.add(exitItem);
        
         trayIcon.setPopupMenu(popup);
@@ -202,6 +227,9 @@ public class SunTray {
         checkIcon();
         daysUntilEvent();
         calculateMaxMins();
+
+        Weather weather = weatherService.getTodaysWeather("berkley", weatherAPIKey);
+		setWeather(weather);
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -341,7 +369,15 @@ public class SunTray {
 
 
 	}
-	
+
+	public void setWeather(Weather weather) {
+		curretConditions.setLabel("Current Weather: " + weather.getCurrentWeather());
+		currentTemp.setLabel("Current Temp: " + weather.getCurrentTempF() + '\u00B0' + "F");
+		maxTemp.setLabel("Max Temp: " + weather.getMaxTempF() + '\u00B0' + "F");
+		minTemp.setLabel("Min Temp: " + weather.getMinTempF() + '\u00B0' + "F");
+
+	}
+
 //=========PRIVATE Methods
 	private long numberOfDaysBetween(String inputDate1, String inputDate2) throws ParseException {
 		SimpleDateFormat myFormat = new SimpleDateFormat("dd-MM-yyyy");
