@@ -1,4 +1,5 @@
-/dist
+/dist/
 *.iml
 *.class
 /release/
+*.DS_Store

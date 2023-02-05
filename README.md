@@ -15,3 +15,4 @@ Requires API key specify in `SunTray.java`
 ## Todo
 - Weather Precip
 - Environmen variable for API key
+- JUnit
