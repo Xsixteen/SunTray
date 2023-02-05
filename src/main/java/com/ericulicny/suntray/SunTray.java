@@ -48,21 +48,22 @@ public class SunTray {
 	private MenuItem maxTemp;
 	private MenuItem minTemp;
 	private MenuItem curretConditions;
-
+	private MenuItem windSpeed;
 
 	private Image sunIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("sun-icon-md.png"));
 	private Image moonIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("full-moon-icon-md.png"));
+	private Image snowIcon  = Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("snowflake-icon.png"));
+	private Image rainIcon  = Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("raindrop-icon.png"));
 
-	
 	private TrayIcon trayIcon;
 	private static Timer pulse;
 	private Location currentLocation;
-	private static String version              = "v0.13";
-	private static Integer CONST_TIMER_MS      = 5*60000;
+	private static String version              = "v0.2";
+	private static Integer CONST_TIMER_MS      = 10*60000;
 
 	private WeatherService weatherService 	   = new WeatherService();
 
-	private String weatherAPIKey			   = "647f8fa8c4890ee185692dc94807a4a0";
+	private String weatherAPIKey			   = "";
 
 	public static void main(String[] args) throws AWTException, ParseException {
 		Location clintonTwp = new Location(42.5869, -82.9200);
@@ -98,7 +99,7 @@ public class SunTray {
         }
         final PopupMenu popup = new PopupMenu();
         Image i  = Toolkit.getDefaultToolkit().createImage("src/suntray/sun-icon-md.png");
-        trayIcon = new TrayIcon(sunIcon,"tray icon");
+        trayIcon = new TrayIcon(sunIcon,"SunTray Monitor");
         final SystemTray tray = SystemTray.getSystemTray();
        
         // Create a pop-up menu components
@@ -133,6 +134,8 @@ public class SunTray {
 		maxTemp.setEnabled(false);
 		minTemp = new MenuItem("Low Temp: ");
 		minTemp.setEnabled(false);
+		windSpeed = new MenuItem("Wind Speed: ");
+		windSpeed.setEnabled(false);
         MenuItem exitItem = new MenuItem("Exit");
         exitItem.addActionListener(new ActionListener() {
         	public void actionPerformed(ActionEvent arg0) {
@@ -161,6 +164,7 @@ public class SunTray {
 		popup.add(currentTemp);
 		popup.add(maxTemp);
 		popup.add(minTemp);
+		popup.add(windSpeed);
 		popup.addSeparator();
         popup.add(exitItem);
        
@@ -218,18 +222,20 @@ public class SunTray {
 	public void doUpdate() throws ParseException {
 	    this.currentSun = new Sun(this.currentLocation);
 	    this.futureSun  = new Sun(this.currentLocation);
-	    
+
+		Weather weather = weatherService.getTodaysWeather("berkley", weatherAPIKey);
+		setWeather(weather);
+
 		currentSunDate();
 		setTime(currentSun.getSunset(), currentSun.getSunrise());
 		deltaTime();
 		tommorrowDeltaTime();
 		dayLength(currentSun.getSunset(), currentSun.getSunrise());
-        checkIcon();
+        checkIcon(weather);
         daysUntilEvent();
         calculateMaxMins();
 
-        Weather weather = weatherService.getTodaysWeather("berkley", weatherAPIKey);
-		setWeather(weather);
+
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -375,7 +381,7 @@ public class SunTray {
 		currentTemp.setLabel("Current Temp: " + weather.getCurrentTempF() + '\u00B0' + "F");
 		maxTemp.setLabel("Max Temp: " + weather.getMaxTempF() + '\u00B0' + "F");
 		minTemp.setLabel("Min Temp: " + weather.getMinTempF() + '\u00B0' + "F");
-
+		windSpeed.setLabel("Wind Speed: " + weather.getCurrentWind() + " mph");
 	}
 
 //=========PRIVATE Methods
@@ -420,13 +426,17 @@ public class SunTray {
 		return true;
 	}
 
-	private void checkIcon() {
+	private void checkIcon(Weather weather) {
 		if(hasSunSet() || !hasSunRisen()) {
 			trayIcon.setImage(moonIcon);
 		} else {
 			trayIcon.setImage(sunIcon);
 		}
-	
+		if(weather.getCurrentWeather().toLowerCase().contains("rain")) {
+			trayIcon.setImage(rainIcon);
+		} else if(weather.getCurrentWeather().toLowerCase().contains("snow")) {
+			trayIcon.setImage(snowIcon);
+		}
 	}
 	
 
