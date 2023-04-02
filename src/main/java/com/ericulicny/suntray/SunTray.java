@@ -70,7 +70,7 @@ public class SunTray {
 		
 		final SunTray h = new SunTray(clintonTwp);
 		h.doUpdate();
-	
+
         
         pulse = new Timer(CONST_TIMER_MS, new ActionListener() {
         	   public void actionPerformed(ActionEvent evt) {
@@ -224,7 +224,9 @@ public class SunTray {
 	    this.futureSun  = new Sun(this.currentLocation);
 
 		Weather weather = weatherService.getTodaysWeather("berkley", weatherAPIKey);
-		setWeather(weather);
+		if(weather != null) {
+			setWeather(weather);
+		}
 
 		currentSunDate();
 		setTime(currentSun.getSunset(), currentSun.getSunrise());
