@@ -434,9 +434,9 @@ public class SunTray {
 		} else {
 			trayIcon.setImage(sunIcon);
 		}
-		if(weather.getCurrentWeather().toLowerCase().contains("rain")) {
+		if(weather != null && weather.getCurrentWeather().toLowerCase().contains("rain")) {
 			trayIcon.setImage(rainIcon);
-		} else if(weather.getCurrentWeather().toLowerCase().contains("snow")) {
+		} else if(weather != null && weather.getCurrentWeather().toLowerCase().contains("snow")) {
 			trayIcon.setImage(snowIcon);
 		}
 	}
