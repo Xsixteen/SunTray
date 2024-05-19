@@ -3,3 +3,6 @@
 *.class
 /release/
 *.DS_Store
+Thumbs.db
+*.idea
+/target/
