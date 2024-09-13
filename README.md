@@ -5,14 +5,15 @@ Icons from: <a href="https://www.flaticon.com/free-icons/drop" title="drop icons
 
 
 ## Open Weather API
-Requires API key specify in `SunTray.java`
+Requires API key specified in `SunTray.java`
 
 
 ## OSX App Bundling
 1) Execute Maven `install` to build jar
-2) Execute `./bundleOSXApp.sh` to bundle application into an OSX applications
+2) Execute `./bundleOSXApp.sh` to bundle application into an OSX application
 
 ## Todo
 - Weather Precip
-- Environmen variable for API key
+- Environment variable for API key
 - JUnit
+- Handle API Keys in a more secure manner
