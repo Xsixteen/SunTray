@@ -7,439 +7,348 @@ import java.awt.PopupMenu;
 import java.awt.SystemTray;
 import java.awt.Toolkit;
 import java.awt.TrayIcon;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.concurrent.TimeUnit;
-
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.MonthDay;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.swing.Timer;
 
 import com.ericulicny.domain.Weather;
-import com.ericulicny.weather.WeatherService;
-import sun.Location;
+import com.ericulicny.sun.Location;
 import com.ericulicny.sun.Sun;
+import com.ericulicny.weather.WeatherService;
 
+/**
+ * A macOS system tray application displaying sunrise/sunset times,
+ * seasonal countdowns, and current weather conditions.
+ */
 public class SunTray {
-	
-	//private static Sun s;
-	private java.util.Date sunsetTime;
-	private java.util.Date sunriseTime;
 
-	private Sun currentSun;
-	private Sun futureSun;
-	private MenuItem sunset;
-	private MenuItem sunrise;
-	private MenuItem timeTo;
-	private MenuItem tomDelt;
-	private MenuItem dayLen;
-	private MenuItem ttSummer;
-	private MenuItem ttWinter;
-	private MenuItem ttFall;
-	private MenuItem ttSpring;
-	private MenuItem maxDay;
-	private MenuItem minDay;
-	private MenuItem currentTemp;
-	private MenuItem maxTemp;
-	private MenuItem minTemp;
-	private MenuItem curretConditions;
-	private MenuItem windSpeed;
+    private static final Logger logger = Logger.getLogger(SunTray.class.getName());
+    private static final String VERSION = "v1.0";
+    private static final int UPDATE_INTERVAL_MS = 30 * 60_000; // 30 minutes
+    private static final ZoneId ZONE = ZoneId.systemDefault();
 
-	private Image sunIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("sun-icon-md.png"));
-	private Image moonIcon 	= Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("full-moon-icon-md.png"));
-	private Image snowIcon  = Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("snowflake-icon.png"));
-	private Image rainIcon  = Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("raindrop-icon.png"));
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("h:mma");
+    private static final DateTimeFormatter TIME_FORMAT_FULL = DateTimeFormatter.ofPattern("h:mma MMM dd yyyy");
 
-	private TrayIcon trayIcon;
-	private static Timer pulse;
-	private Location currentLocation;
-	private static String version              = "v0.2";
-	private static Integer CONST_TIMER_MS      = 10*60000;
+    // Seasonal event dates (month-day)
+    private static final MonthDay SPRING_EQUINOX = MonthDay.of(3, 21);
+    private static final MonthDay SUMMER_SOLSTICE = MonthDay.of(6, 21);
+    private static final MonthDay FALL_EQUINOX = MonthDay.of(9, 21);
+    private static final MonthDay WINTER_SOLSTICE = MonthDay.of(12, 21);
 
-	private WeatherService weatherService 	   = new WeatherService();
+    // Configuration
+    private final Location location;
+    private final String weatherCity;
+    private final WeatherService weatherService;
 
-	private String weatherAPIKey			   = "";
+    // Tray icon images
+    private final Image sunIcon = loadIcon("sun-icon-md.png");
+    private final Image moonIcon = loadIcon("full-moon-icon-md.png");
+    private final Image snowIcon = loadIcon("snowflake-icon.png");
+    private final Image rainIcon = loadIcon("raindrop-icon.png");
 
-	public static void main(String[] args) throws AWTException, ParseException {
-		Location clintonTwp = new Location(42.5869, -82.9200);
-		
-		final SunTray h = new SunTray(clintonTwp);
-		h.doUpdate();
+    // System tray
+    private TrayIcon trayIcon;
 
-        
-        pulse = new Timer(CONST_TIMER_MS, new ActionListener() {
-        	   public void actionPerformed(ActionEvent evt) {
-        		   	try {
-						h.doUpdate();
-					} catch (ParseException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-        	   }
-        });
+    // Current state
+    private LocalTime sunsetTime;
+    private LocalTime sunriseTime;
+
+    // Menu items — sun data
+    private final MenuItem sunsetItem = createDisabledItem("Sunset: ");
+    private final MenuItem sunriseItem = createDisabledItem("Sunrise: ");
+    private final MenuItem timeToItem = createDisabledItem("Time until Sunset: ");
+    private final MenuItem tomorrowDeltaItem = createDisabledItem("Tomorrow change: ");
+    private final MenuItem dayLengthItem = createDisabledItem("Today's Day Length: ");
+
+    // Menu items — seasonal countdowns
+    private final MenuItem springItem = createDisabledItem("Days until Spring Equinox: ");
+    private final MenuItem summerItem = createDisabledItem("Days until Summer Solstice: ");
+    private final MenuItem fallItem = createDisabledItem("Days until Fall Equinox: ");
+    private final MenuItem winterItem = createDisabledItem("Days until Winter Solstice: ");
+
+    // Menu items — max/min day lengths
+    private final MenuItem maxDayItem = createDisabledItem("Maximum Day Length: ");
+    private final MenuItem minDayItem = createDisabledItem("Minimum Day Length: ");
+
+    // Menu items — weather
+    private final MenuItem currentConditionsItem = createDisabledItem("Current Weather: ");
+    private final MenuItem currentTempItem = createDisabledItem("Current Temp: ");
+    private final MenuItem maxTempItem = createDisabledItem("High Temp: ");
+    private final MenuItem minTempItem = createDisabledItem("Low Temp: ");
+    private final MenuItem windSpeedItem = createDisabledItem("Wind Speed: ");
+
+    // ── Entry point ─────────────────────────────────────────────────────
+
+    public static void main(String[] args) {
+        String apiKey = System.getenv("SUNTRAY_WEATHER_API_KEY");
+        if (apiKey == null || apiKey.isBlank()) {
+            logger.severe("Environment variable SUNTRAY_WEATHER_API_KEY is not set. Weather data will be unavailable.");
+            apiKey = "";
+        }
+
+        double lat = parseEnvDouble("SUNTRAY_LATITUDE", 42.5869);
+        double lon = parseEnvDouble("SUNTRAY_LONGITUDE", -82.9200);
+        String city = System.getenv().getOrDefault("SUNTRAY_WEATHER_CITY", "berkley");
+
+        Location location = new Location(lat, lon);
+        SunTray app = new SunTray(location, city, apiKey);
+        app.doUpdate();
+
+        Timer pulse = new Timer(UPDATE_INTERVAL_MS, e -> app.doUpdate());
         pulse.start();
+    }
 
-	
-	}
-	
-	public SunTray(Location location) {
-	    this.currentLocation = location;
-		this.currentSun      = new Sun(this.currentLocation);
-		this.futureSun       = new Sun(this.currentLocation);
-				
-	      //Check the SystemTray is supported
+    // ── Constructor ─────────────────────────────────────────────────────
+
+    public SunTray(Location location, String weatherCity, String apiKey) {
+        this.location = location;
+        this.weatherCity = weatherCity;
+        this.weatherService = new WeatherService(apiKey);
+
         if (!SystemTray.isSupported()) {
-            System.out.println("SystemTray is not supported");
+            logger.severe("SystemTray is not supported on this platform");
             return;
         }
-        final PopupMenu popup = new PopupMenu();
-        Image i  = Toolkit.getDefaultToolkit().createImage("src/suntray/sun-icon-md.png");
-        trayIcon = new TrayIcon(sunIcon,"SunTray Monitor");
-        final SystemTray tray = SystemTray.getSystemTray();
-       
-        // Create a pop-up menu components
-        sunset = new MenuItem("Sunset: ");
-        sunset.setEnabled(false);
-        sunrise = new MenuItem("Sunrise: ");
-        sunrise.setEnabled(false);
-        timeTo = new MenuItem("Time until Sunset: ");
-        timeTo.setEnabled(false);
-        tomDelt = new MenuItem("Tomorrow change: ");
-        tomDelt.setEnabled(false);
-        dayLen = new MenuItem("Today's Day Length: ");
-        dayLen.setEnabled(false);
-        ttWinter = new MenuItem("Days until Summer Solstice: ");
-        ttWinter.setEnabled(false);
-        ttSummer = new MenuItem("Days until Winter Solstice: ");
-        ttSummer.setEnabled(false);
-        ttFall = new MenuItem("Days until Fall Equinox: ");
-        ttFall.setEnabled(false);
-        ttSpring = new MenuItem("Days until Spring Equinox: ");
-        ttSpring.setEnabled(false);
-        maxDay = new MenuItem("Maximum Day Length: ");
-        maxDay.setEnabled(false);
-        minDay = new MenuItem("Minimum Day Length: ");
-        minDay.setEnabled(false);
 
-		curretConditions = new MenuItem("Current Weather: ");
-		curretConditions.setEnabled(false);
-		currentTemp = new MenuItem("Current Temp: ");
-		currentTemp.setEnabled(false);
-		maxTemp = new MenuItem("High Temp: ");
-		maxTemp.setEnabled(false);
-		minTemp = new MenuItem("Low Temp: ");
-		minTemp.setEnabled(false);
-		windSpeed = new MenuItem("Wind Speed: ");
-		windSpeed.setEnabled(false);
-        MenuItem exitItem = new MenuItem("Exit");
-        exitItem.addActionListener(new ActionListener() {
-        	public void actionPerformed(ActionEvent arg0) {
-                // TODO Auto-generated method stub
-                System.exit(0);
-            }
-        });
-        
-        //Add components to pop-up menu
-        popup.add(sunset);
-        popup.add(sunrise);
-        popup.add(dayLen);
-        popup.addSeparator();
-        popup.add(timeTo);
-        popup.add(tomDelt);
-        popup.addSeparator();
-        popup.add(ttWinter);
-        popup.add(ttSpring);
-        popup.add(ttSummer);
-        popup.add(ttFall);
-        popup.addSeparator();
-        popup.add(maxDay);
-        popup.add(minDay);
-        popup.addSeparator();
-        popup.add(curretConditions);
-		popup.add(currentTemp);
-		popup.add(maxTemp);
-		popup.add(minTemp);
-		popup.add(windSpeed);
-		popup.addSeparator();
-        popup.add(exitItem);
-       
-        trayIcon.setPopupMenu(popup);
-       
+        trayIcon = new TrayIcon(sunIcon, "SunTray " + VERSION);
+        trayIcon.setPopupMenu(buildMenu());
+
         try {
-            tray.add(trayIcon);
+            SystemTray.getSystemTray().add(trayIcon);
         } catch (AWTException e) {
-            System.out.println("TrayIcon could not be added.");
+            logger.log(Level.SEVERE, "Failed to add tray icon", e);
         }
-        
+    }
 
-	}
-	
-	@SuppressWarnings("deprecation")
-	public void currentSunDate() throws ParseException {
-		Date cur = new Date();
-		Calendar cal = Calendar.getInstance();
-		cal.setTime(cur);
-		
-		currentSun.setDate(cur.getDate(), cur.getMonth() + 1, cal.get(Calendar.YEAR));
-		currentSun.calculate();
-		
-	}
-	
-	public void calculateMaxMins() throws ParseException {	
-		
-		Calendar calSunset	 = Calendar.getInstance(); 
-		Calendar calSunrise  = Calendar.getInstance(); 
-	
-		
-		Date cur = new Date();
-		Calendar cal = Calendar.getInstance();
-		cal.setTime(cur);
-		futureSun.setDate(21, 6, cal.get(Calendar.YEAR));
-		futureSun.calculate();
-		
-		calSunset.setTime(futureSun.getSunset()); 
-		calSunset.set(Calendar.YEAR, 2016);
-		calSunset.set(Calendar.DAY_OF_MONTH, 21);
-		calSunset.set(Calendar.MONTH, 21);
-		calSunrise.setTime(futureSun.getSunrise());
-		calSunrise.set(Calendar.YEAR, 2016);
-		calSunrise.set(Calendar.DAY_OF_MONTH, 21);
-		calSunrise.set(Calendar.MONTH, 21);
-		
-		genericDayLength(calSunset.getTime(), calSunrise.getTime(), maxDay, "Maximum Day Length: " );
-		
-		futureSun.setDate(21, 12, cal.get(Calendar.YEAR));
-		futureSun.calculate();
-		genericDayLength(futureSun.getSunset(), futureSun.getSunrise(), minDay, "Minimum Day Length: " );
-		
-	}
-	
-	public void doUpdate() throws ParseException {
-	    this.currentSun = new Sun(this.currentLocation);
-	    this.futureSun  = new Sun(this.currentLocation);
+    // ── Update cycle ────────────────────────────────────────────────────
 
-		Weather weather = weatherService.getTodaysWeather("berkley", weatherAPIKey);
-		if(weather != null) {
-			setWeather(weather);
-		}
+    public void doUpdate() {
+        try {
+            LocalDate today = LocalDate.now();
 
-		currentSunDate();
-		setTime(currentSun.getSunset(), currentSun.getSunrise());
-		deltaTime();
-		tommorrowDeltaTime();
-		dayLength(currentSun.getSunset(), currentSun.getSunrise());
-        checkIcon(weather);
-        daysUntilEvent();
-        calculateMaxMins();
+            // Calculate sun times for today
+            Sun currentSun = new Sun(location, ZONE);
+            currentSun.calculate(today);
 
+            this.sunsetTime = currentSun.getSunsetTime();
+            this.sunriseTime = currentSun.getSunriseTime();
 
-	}
-	
-	@SuppressWarnings("deprecation")
-	public void setTime(java.util.Date d, java.util.Date r) throws ParseException {
-		Date cur = new Date();
-		DateFormat df = new SimpleDateFormat("hh:mma MMM dd yyyy");
-		
-		sunsetTime = d;
-		sunriseTime = r;
-		
-		sunsetTime.setDate(cur.getDate());
-		sunsetTime.setMonth(cur.getMonth());
-		sunsetTime.setYear(cur.getYear());
-		
-		sunriseTime.setDate(cur.getDate());
-		sunriseTime.setMonth(cur.getMonth());
-		sunriseTime.setYear(cur.getYear());
-		
-		if(hasSunSet()) {
-			sunset.setLabel("Sunset occured at: " + df.format(d));
-			tomorrowSunRise();
-		} else {
-			sunrise.setLabel("Sunrise: " + df.format(r));
-			sunset.setLabel("Sunset: " + df.format(d));
-		}
-	}
-	
-	public void tommorrowDeltaTime() throws ParseException {
-		Sun tomsun = new Sun(42.5869, -82.9200);
+            // Update all menu sections
+            updateSunTimes(currentSun, today);
+            updateDeltaTime();
+            updateTomorrowDelta(currentSun, today);
+            updateDayLength(sunsetTime, sunriseTime, dayLengthItem, "Today's Day Length: ");
+            updateSeasonalCountdowns(today);
+            updateMaxMinDayLengths(today);
 
-		Date cur = new Date();
-		Date todaySunset, tomSunset, todaySunrise, tomSunrise;
-		long millisSunset, millisSunrise, millis;
-		Calendar c = Calendar.getInstance(); 
-		
-		c.setTime(cur); 
-		c.add(Calendar.DATE, 1);
-		cur = c.getTime();
-		
-		tomsun.setDate(cur.getDate(), cur.getMonth()+1, c.get(Calendar.YEAR));
-		tomsun.calculate();
-	
-		todaySunset = currentSun.getSunsetCalendar().getTime();
-		tomSunset = tomsun.getSunsetCalendar().getTime();
-		
-		todaySunrise = currentSun.getSunriseCalendar().getTime();
-		tomSunrise = tomsun.getSunriseCalendar().getTime();
-	
-		long todayDuration    = todaySunset.getTime() - todaySunrise.getTime();
-		long tomorrowDuration = tomSunset.getTime() - tomSunrise.getTime();
+            // Fetch and display weather
+            Optional<Weather> weather = weatherService.getTodaysWeather(weatherCity);
+            weather.ifPresent(this::updateWeatherDisplay);
 
-		long delta = tomorrowDuration - todayDuration;
-	    tomDelt.setLabel("Tomorrow Time Delta: " +TimeUnit.MILLISECONDS.toMinutes(delta) + " min and " + (TimeUnit.MILLISECONDS.toSeconds(delta) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(delta))) + " sec");
-	}
-	
-	public void tomorrowSunRise() throws ParseException {
-		DateFormat df = new SimpleDateFormat("hh:mma");
-		Sun temp = new Sun(42.5869, -82.9200);
-		Date cur = new Date();
-		Calendar c = Calendar.getInstance(); 
-		
-		c.setTime(cur); 
-		c.add(Calendar.DATE, 1);
-		cur = c.getTime();
-	 
-		temp.setDate(cur.getDate(), cur.getMonth() + 1, cur.getYear());
-		temp.calculate();
-		
-		sunrise.setLabel("Tomorrow's Sunrise: " + df.format(temp.getSunrise()));
-	}
-	
-	public void deltaTime() {
-		DateFormat df = new SimpleDateFormat("hh:mm");
-		long millisToSet = (sunsetTime.getTime()-System.currentTimeMillis());
-		if(hasSunSet()) {
-			timeTo.setLabel("Time since Sunset: " + TimeUnit.MILLISECONDS.toHours(millisToSet) + " hour and " + (TimeUnit.MILLISECONDS.toMinutes(millisToSet) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(millisToSet))) + " minutes");
-		} else {
-			timeTo.setLabel("Time until Sunset: " + TimeUnit.MILLISECONDS.toHours(millisToSet) + " hour and " + (TimeUnit.MILLISECONDS.toMinutes(millisToSet) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(millisToSet))) + " minutes");
-		} 
-	}
-	
-	public void dayLength(java.util.Date sunset, java.util.Date sunrise) {
-		long milliseconds = (sunset.getTime() - sunrise.getTime());
-		dayLen.setLabel("Today's Day Length: " + TimeUnit.MILLISECONDS.toHours(milliseconds) + " hours and " + (TimeUnit.MILLISECONDS.toMinutes(milliseconds) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(milliseconds))) + " minutes");
-	}
-	
-	public void genericDayLength(java.util.Date sunset, java.util.Date sunrise, MenuItem menuItem, String label) {
-	
-		
-		long milliseconds = (sunset.getTime() - sunrise.getTime());
-		 
-		menuItem.setLabel(label + TimeUnit.MILLISECONDS.toHours(milliseconds) + " hours and " + (TimeUnit.MILLISECONDS.toMinutes(milliseconds) - TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(milliseconds))) + " minutes");
-	}
-	
-	
-	public void daysUntilEvent() {
-		Calendar cal		= Calendar.getInstance();
-		final String summer = "21-06-";
-		final String winter = "21-12-";
-		final String spring = "21-03-";
-		final String fall	= "21-09-";
+            // Update tray icon based on sun/weather state
+            updateIcon(weather.orElse(null));
 
-		String year	 		= new SimpleDateFormat("yyyy").format(cal.getTime());
-		cal.add(Calendar.YEAR, 1); 
-		String yearPlusOne  = new SimpleDateFormat("yyyy").format(cal.getTime()); 
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Update cycle failed", e);
+        }
+    }
 
+    // ── Sun times ───────────────────────────────────────────────────────
 
-		String today  		= new SimpleDateFormat("dd-MM-yyyy").format(Calendar.getInstance().getTime());
+    private void updateSunTimes(Sun currentSun, LocalDate today) {
+        LocalDateTime sunsetDateTime = LocalDateTime.of(today, sunsetTime);
+        LocalDateTime sunriseDateTime = LocalDateTime.of(today, sunriseTime);
 
-		
-	    try {
-	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(spring+year))
-	    		ttSpring.setLabel("Days until Spring Equinox: " + this.numberOfDaysBetween(today, spring+year) + " Days");
-	    	else
-	    		ttSpring.setLabel("Days until Spring Equinox: " + this.numberOfDaysBetween(today, spring+yearPlusOne) + " Days");
-	    	
-	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(summer+year))
-	    		ttSummer.setLabel("Days until Summer Solstice: " + this.numberOfDaysBetween(today, summer+year) + " Days");
-	    	else
-	    		ttSummer.setLabel("Days until Summer Solstice: " + this.numberOfDaysBetween(today, summer+yearPlusOne) + " Days");
-	    	
-	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(fall+year))
-	    		ttFall.setLabel("Days until Fall Equinox: " + this.numberOfDaysBetween(today, fall+year) + " Days");
-	    	else
-	    		ttFall.setLabel("Days until Fall Equinox: " + this.numberOfDaysBetween(today, fall+yearPlusOne) + " Days");
-	    	
-	    	
-	    	if(this.convertDateToTimeFormat(today) < this.convertDateToTimeFormat(winter+year))
-	    		ttWinter.setLabel("Days until Winter Solstice: " + this.numberOfDaysBetween(today, winter+year) + " Days");
-	    	else
-	    		ttWinter.setLabel("Days until Winter Solstice: " + this.numberOfDaysBetween(today, winter+yearPlusOne) + " Days");
+        if (hasSunSet()) {
+            sunsetItem.setLabel("Sunset occurred at: " + sunsetDateTime.format(TIME_FORMAT_FULL));
+            updateTomorrowSunrise(today);
+        } else {
+            sunriseItem.setLabel("Sunrise: " + sunriseDateTime.format(TIME_FORMAT_FULL));
+            sunsetItem.setLabel("Sunset: " + sunsetDateTime.format(TIME_FORMAT_FULL));
+        }
+    }
 
-		} catch (ParseException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+    private void updateDeltaTime() {
+        LocalDateTime sunsetDateTime = LocalDateTime.of(LocalDate.now(), sunsetTime);
+        Duration delta = Duration.between(LocalDateTime.now(), sunsetDateTime);
 
+        long hours = Math.abs(delta.toHours());
+        long minutes = Math.abs(delta.toMinutesPart());
 
-	}
+        String prefix = hasSunSet() ? "Time since Sunset: " : "Time until Sunset: ";
+        timeToItem.setLabel(prefix + hours + " hour and " + minutes + " minutes");
+    }
 
-	public void setWeather(Weather weather) {
-		curretConditions.setLabel("Current Weather: " + weather.getCurrentWeather());
-		currentTemp.setLabel("Current Temp: " + weather.getCurrentTempF() + '\u00B0' + "F");
-		maxTemp.setLabel("Max Temp: " + weather.getMaxTempF() + '\u00B0' + "F");
-		minTemp.setLabel("Min Temp: " + weather.getMinTempF() + '\u00B0' + "F");
-		windSpeed.setLabel("Wind Speed: " + weather.getCurrentWind() + " mph");
-	}
+    private void updateTomorrowSunrise(LocalDate today) {
+        LocalDate tomorrow = today.plusDays(1);
+        Sun tomorrowSun = new Sun(location, ZONE);
+        tomorrowSun.calculate(tomorrow);
+        sunriseItem.setLabel("Tomorrow's Sunrise: " + tomorrowSun.getSunriseTime().format(TIME_FORMAT));
+    }
 
-//=========PRIVATE Methods
-	private long numberOfDaysBetween(String inputDate1, String inputDate2) throws ParseException {
-		SimpleDateFormat myFormat = new SimpleDateFormat("dd-MM-yyyy");
-	    Date date1 = myFormat.parse(inputDate1);
-	    Date date2 = myFormat.parse(inputDate2);
-	    long diff  = date2.getTime() - date1.getTime();
-	    long days  = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
-	    
-	    return days;
-	}
-	
-	private long convertDateToTimeFormat(String inputDate1) throws ParseException {
-		SimpleDateFormat myFormat = new SimpleDateFormat("dd-MM-yyyy");
-	    Date date1 = myFormat.parse(inputDate1);
-	    long millis  = date1.getTime();
-	    
-	    return millis;
-	}
-	
-	public boolean hasSunSet() {
-		long millisToSet  = (sunsetTime.getTime()-System.currentTimeMillis());
-		long millisToRise = (System.currentTimeMillis()-sunriseTime.getTime());
-		
-		//Both values are positive if we're between sunrise and sunset.
-		if(millisToSet > -1) {
-			return false; 
-		}
-		
-		return true;
-	}
-	
-	public boolean hasSunRisen() {
-		long millisToRise = (System.currentTimeMillis()-sunriseTime.getTime());
-		
-		//MillisToRise is positive if time is after sunrise. 
-		if(millisToRise < -1) {
-			return false; 
-		}
-		
-		return true;
-	}
+    // ── Tomorrow delta ──────────────────────────────────────────────────
 
-	private void checkIcon(Weather weather) {
-		if(hasSunSet() || !hasSunRisen()) {
-			trayIcon.setImage(moonIcon);
-		} else {
-			trayIcon.setImage(sunIcon);
-		}
-		if(weather != null && weather.getCurrentWeather().toLowerCase().contains("rain")) {
-			trayIcon.setImage(rainIcon);
-		} else if(weather != null && weather.getCurrentWeather().toLowerCase().contains("snow")) {
-			trayIcon.setImage(snowIcon);
-		}
-	}
-	
+    private void updateTomorrowDelta(Sun currentSun, LocalDate today) {
+        LocalDate tomorrow = today.plusDays(1);
+        Sun tomorrowSun = new Sun(location, ZONE);
+        tomorrowSun.calculate(tomorrow);
 
+        Duration todayLength = Duration.between(currentSun.getSunriseDateTime(), currentSun.getSunsetDateTime());
+        Duration tomorrowLength = Duration.between(tomorrowSun.getSunriseDateTime(), tomorrowSun.getSunsetDateTime());
+        Duration delta = tomorrowLength.minus(todayLength);
+
+        long minutes = delta.toMinutes();
+        long seconds = Math.abs(delta.toSecondsPart());
+        tomorrowDeltaItem.setLabel("Tomorrow Time Delta: " + minutes + " min and " + seconds + " sec");
+    }
+
+    // ── Day length ──────────────────────────────────────────────────────
+
+    private void updateDayLength(LocalTime sunset, LocalTime sunrise, MenuItem menuItem, String label) {
+        Duration duration = Duration.between(sunrise, sunset);
+        long hours = duration.toHours();
+        long minutes = duration.toMinutesPart();
+        menuItem.setLabel(label + hours + " hours and " + minutes + " minutes");
+    }
+
+    private void updateMaxMinDayLengths(LocalDate today) {
+        int year = today.getYear();
+
+        // Summer solstice — longest day
+        Sun summerSun = new Sun(location, ZONE);
+        summerSun.calculate(LocalDate.of(year, 6, 21));
+        updateDayLength(summerSun.getSunsetTime(), summerSun.getSunriseTime(), maxDayItem, "Maximum Day Length: ");
+
+        // Winter solstice — shortest day
+        Sun winterSun = new Sun(location, ZONE);
+        winterSun.calculate(LocalDate.of(year, 12, 21));
+        updateDayLength(winterSun.getSunsetTime(), winterSun.getSunriseTime(), minDayItem, "Minimum Day Length: ");
+    }
+
+    // ── Seasonal countdowns ─────────────────────────────────────────────
+
+    private void updateSeasonalCountdowns(LocalDate today) {
+        updateSeasonalItem(today, SPRING_EQUINOX, springItem, "Days until Spring Equinox: ");
+        updateSeasonalItem(today, SUMMER_SOLSTICE, summerItem, "Days until Summer Solstice: ");
+        updateSeasonalItem(today, FALL_EQUINOX, fallItem, "Days until Fall Equinox: ");
+        updateSeasonalItem(today, WINTER_SOLSTICE, winterItem, "Days until Winter Solstice: ");
+    }
+
+    private void updateSeasonalItem(LocalDate today, MonthDay event, MenuItem menuItem, String label) {
+        LocalDate eventDate = event.atYear(today.getYear());
+        if (!today.isBefore(eventDate)) {
+            eventDate = event.atYear(today.getYear() + 1);
+        }
+        long days = ChronoUnit.DAYS.between(today, eventDate);
+        menuItem.setLabel(label + days + " Days");
+    }
+
+    // ── Weather ─────────────────────────────────────────────────────────
+
+    private void updateWeatherDisplay(Weather weather) {
+        currentConditionsItem.setLabel("Current Weather: " + weather.currentWeather());
+        currentTempItem.setLabel("Current Temp: " + weather.currentTempF() + "\u00B0F");
+        maxTempItem.setLabel("Max Temp: " + weather.maxTempF() + "\u00B0F");
+        minTempItem.setLabel("Min Temp: " + weather.minTempF() + "\u00B0F");
+        windSpeedItem.setLabel("Wind Speed: " + weather.currentWind() + " mph");
+    }
+
+    // ── Icon management ─────────────────────────────────────────────────
+
+    private void updateIcon(Weather weather) {
+        if (hasSunSet() || !hasSunRisen()) {
+            trayIcon.setImage(moonIcon);
+        } else {
+            trayIcon.setImage(sunIcon);
+        }
+
+        if (weather != null) {
+            String conditions = weather.currentWeather().toLowerCase();
+            if (conditions.contains("rain")) {
+                trayIcon.setImage(rainIcon);
+            } else if (conditions.contains("snow")) {
+                trayIcon.setImage(snowIcon);
+            }
+        }
+    }
+
+    private boolean hasSunSet() {
+        return LocalTime.now().isAfter(sunsetTime);
+    }
+
+    private boolean hasSunRisen() {
+        return LocalTime.now().isAfter(sunriseTime);
+    }
+
+    // ── Menu construction ───────────────────────────────────────────────
+
+    private PopupMenu buildMenu() {
+        PopupMenu popup = new PopupMenu();
+
+        popup.add(sunsetItem);
+        popup.add(sunriseItem);
+        popup.add(dayLengthItem);
+        popup.addSeparator();
+        popup.add(timeToItem);
+        popup.add(tomorrowDeltaItem);
+        popup.addSeparator();
+        popup.add(summerItem);
+        popup.add(springItem);
+        popup.add(winterItem);
+        popup.add(fallItem);
+        popup.addSeparator();
+        popup.add(maxDayItem);
+        popup.add(minDayItem);
+        popup.addSeparator();
+        popup.add(currentConditionsItem);
+        popup.add(currentTempItem);
+        popup.add(maxTempItem);
+        popup.add(minTempItem);
+        popup.add(windSpeedItem);
+        popup.addSeparator();
+
+        MenuItem exitItem = new MenuItem("Exit");
+        exitItem.addActionListener(e -> System.exit(0));
+        popup.add(exitItem);
+
+        return popup;
+    }
+
+    // ── Utilities ───────────────────────────────────────────────────────
+
+    private static MenuItem createDisabledItem(String label) {
+        MenuItem item = new MenuItem(label);
+        item.setEnabled(false);
+        return item;
+    }
+
+    private Image loadIcon(String resourceName) {
+        return Toolkit.getDefaultToolkit().getImage(
+                getClass().getClassLoader().getResource(resourceName));
+    }
+
+    private static double parseEnvDouble(String envVar, double defaultValue) {
+        String value = System.getenv(envVar);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            logger.warning("Invalid value for " + envVar + ": " + value + ". Using default: " + defaultValue);
+            return defaultValue;
+        }
+    }
 }

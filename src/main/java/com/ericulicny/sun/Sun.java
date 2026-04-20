@@ -1,311 +1,181 @@
 package com.ericulicny.sun;
 
-import sun.Location;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.logging.Logger;
 
-import java.awt.AWTException;
-import java.io.Console;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.TimeZone;
-
-//Based off of: http://williams.best.vwh.net/sunrise_sunset_algorithm.htm
-//Validated against: http://williams.best.vwh.net/sunrise_sunset_example.htm
-
+/**
+ * Solar position calculator for sunrise and sunset times.
+ * <p>
+ * Based on the algorithm from: <a href="http://williams.best.vwh.net/sunrise_sunset_algorithm.htm">
+ * williams.best.vwh.net</a>
+ * <p>
+ * Validated against: <a href="http://williams.best.vwh.net/sunrise_sunset_example.htm">
+ * williams.best.vwh.net example</a>
+ */
 public class Sun {
-	
-	private boolean debug = false;
-	private int sunsetHour;
-	private int sunsetMinute;
-	private int sunsetSecond;
-	private int sunriseHour;
-	private int sunriseMinute;
-	private int sunriseSecond;
-	private Date sunset_time;
-	private Date sunrise_time;
-	private double zenith = 90.833;
-	private int offset = - 4; // 5 for DST TODO: Write DST checking function and handle appropriately.
-	private int day, month, year;
-	private double longitude, latitude;
-	
-	public static void main(String[] args) throws ParseException  {
-		Sun s = new Sun(42.5869, -82.9200);
-			s.setDate(9,6,2013);
-			s.calculate();
-			s.printSunset();
-			s.printSunrise();
-			System.out.println();
-	}
-	
-	public Sun(double lat, double lon) {
-		latitude = lat;
-		longitude = lon;
 
+    private static final Logger logger = Logger.getLogger(Sun.class.getName());
+    private static final double ZENITH = 90.833;
 
-	}
-	
-	public Sun(Location location) {
-		latitude = location.getLatitude();
-		longitude = location.getLongitude();
-	}
-	
-	public void setDate(int d, int m, int y) {
-		day = d;
-		month = m;
-		year = y;
-		
-	}
-	
-	public void calculate() throws ParseException {
-		int dayNum;
-		double meanA, latToHour, trueLong, RA, localHour, meanTime, utc, sunset;
-		double SRmeanA, SRlatToHour, SRtrueLong, SRRA, SRlocalHour, SRmeanTime, SRutc, sunrise;
-		DateFormat df, display;
-		int calculateOffset;
-		if(!TimeZone.getDefault().inDaylightTime( new Date() )) {
-		    calculateOffset = offset -1 ;
-		} else {
-		    calculateOffset = offset;
-		}
-		
-		//CTP Lat/long
-	    //latitude = 42.5869;
-	    //longitude = -82.9200;
-		
-		//Test Case Lat/Long
-		//latitude = 40.9;
-		//longitude = -74.3;
-		
-		dayNum = dayOfTheYear(month, day, year);
-		
-		latToHour   = convLatoHour (dayNum);
-		SRlatToHour = SRconvLatoHour(dayNum);
-		
-		meanA = meanAnomaly(latToHour);
-		SRmeanA = meanAnomaly(SRlatToHour);
-		
-		trueLong   = calcTrueLong(meanA);
-		SRtrueLong = calcTrueLong(SRmeanA);
-		
-		RA   = calcRightAscension(trueLong);
-		SRRA = calcRightAscension(SRtrueLong);
-		
-		localHour   = sunsLocalHour(trueLong);
-		SRlocalHour = SRsunsLocalHour(SRtrueLong);
+    /** Whether to calculate for sunrise or sunset. */
+    public enum SunEvent { SUNRISE, SUNSET }
 
-		meanTime   = meanTimeofSetting(RA, localHour,latToHour);
-		SRmeanTime = meanTimeofSetting(SRRA, SRlocalHour, SRlatToHour);
+    private final double longitude;
+    private final double latitude;
+    private final ZoneId zoneId;
 
-		utc   = convToUTC(meanTime);
-		SRutc = convToUTC(SRmeanTime);
-		
-		sunset  = utc + calculateOffset;
-		sunrise = SRutc + calculateOffset;
-		
-		sunsetHour   = (int) sunset;
-		sunsetMinute = (int) ((sunset - sunsetHour) * 60);
-		sunsetSecond = (int) (((sunset - sunsetHour) * 3600) - sunsetMinute * 60);
+    private LocalDate date;
+    private LocalTime sunsetTime;
+    private LocalTime sunriseTime;
 
-		sunriseHour   = (int) sunrise;
-		sunriseMinute = (int) ((sunrise - sunriseHour) * 60);
-		sunriseSecond = (int) (((sunrise - sunriseHour) * 3600) - sunriseMinute * 60);
-		
-		df = new SimpleDateFormat("HH:mm:ss");
-		display = new SimpleDateFormat("h:mma");
-		
-		try {
-			sunset_time  = df.parse(sunsetHour+":"+sunsetMinute+":"+sunsetSecond);
-			sunrise_time = df.parse(sunriseHour+":"+sunriseMinute+":"+sunriseSecond);
-		} catch (ParseException e) {
-			// TODO Auto-generated catch block
-			System.out.println ("BAD DATE DATA");
-			e.printStackTrace();
-		}
-		
-		
-		if(debug) {
-			System.out.println("Day of the year: " + dayNum);
-	
-			System.out.println("Latitude to hour(t): " + latToHour);
-	
-			System.out.println("Sun's Mean Anomaly: " + meanA);
-	
-			System.out.println("Sun's True Longitude (L): " + trueLong);
-	
-			System.out.println("Right Ascension: " + RA);
-	
-			System.out.println("Local Hour(H): " + localHour);
-	
-			System.out.println("Local mean time (T): " + meanTime);
-	
-			System.out.println("UTC Sunset: " + utc);
-			
-			System.out.println("Sunset: " + sunset);
-			
-			System.out.println("Sunset is at: " + sunsetHour + ":" + sunsetMinute);
-			
-			System.out.println(display.format(sunset_time));
-			System.out.println(display.format(sunrise_time));
-		}
-		
-	}
+    public Sun(Location location, ZoneId zoneId) {
+        this.latitude = location.latitude();
+        this.longitude = location.longitude();
+        this.zoneId = zoneId;
+    }
 
-	public Date getSunset() {
-		return sunset_time;
-	}
-	
-	public Date getSunrise() {
-		return sunrise_time;
-	}
-	
-	public Calendar getSunsetCalendar() {
-		Calendar calSunset	 = Calendar.getInstance(); 
-		
-		calSunset.setTime(sunset_time); 
-		calSunset.set(Calendar.YEAR, year);
-		calSunset.set(Calendar.DAY_OF_MONTH, day);
-		calSunset.set(Calendar.MONTH, month-1);
-		
-		return calSunset;
-	}
-	
-	public Calendar getSunriseCalendar() {
-		Calendar calSunset	 = Calendar.getInstance(); 
-		
-		calSunset.setTime(sunrise_time); 
-		calSunset.set(Calendar.YEAR, year);
-		calSunset.set(Calendar.DAY_OF_MONTH, day);
-		calSunset.set(Calendar.MONTH, month-1);
-		
-		return calSunset;
-	}
-	
-	public void printSunset() {
-		DateFormat display = new SimpleDateFormat("h:mm:ssa");
-		System.out.println(display.format(sunset_time));
-	}
-	
-	public void printSunrise() {
-		DateFormat display = new SimpleDateFormat("h:mm:ssa");
-		System.out.println(display.format(sunrise_time));
-	}
-	//Private Methods
-	
-	
-	private int dayOfTheYear(int month, int day, int year) {
-		int N1, N2, N3;
-		N1 = (int) Math.floor(275 * month / 9);
-		N2 = (int) Math.floor((month + 9) / 12);
-		N3 = (int) (1 + Math.floor((year - 4 * Math.floor(year / 4) + 2) / 3));
-		return (N1 - (N2 * N3) + day - 30);
-	}
+    public Sun(double lat, double lon, ZoneId zoneId) {
+        this.latitude = lat;
+        this.longitude = lon;
+        this.zoneId = zoneId;
+    }
 
-	private double convLatoHour(int dayofyear) {		
-		//Formula for converting latitude to local time for sunset.
-		return ( dayofyear + ((18 - (longitude / 15)) / 24));
-		//for sunrise
-		//return(dayofyear + ((6 - (longitude / 15))/24));
-	}
-	
-	private double SRconvLatoHour(int dayofyear) {		
-		//Formula for converting latitude to local time for sunset.
-		//for sunrise
-		return(dayofyear + ((6 - (longitude / 15))/24));
-	}
-	private double meanAnomaly(double latToHour) {
-		return  ((0.9856 * latToHour) - 3.289);
-	}
+    /**
+     * Sets the date and calculates sunrise/sunset times.
+     */
+    public void calculate(LocalDate date) {
+        this.date = date;
 
-	//Step 4
-	private double calcTrueLong(double meanAnomaly) {
-		//Note all Degs have been converted to Radians by 180/3.14
-		double L = (meanAnomaly + (1.916 * Math.sin((Math.PI/180)*meanAnomaly)) + (0.020 * Math.sin((Math.PI/180)*2 * meanAnomaly)) + 282.634);
+        int dayOfYear = dayOfTheYear(date.getMonthValue(), date.getDayOfMonth(), date.getYear());
 
-		if (L > 360.0) {
-			L = L - 360;
-		} else if (L < 0) {
-			L = L + 360;
-		}
+        // Calculate UTC offset accounting for DST automatically
+        ZonedDateTime zdt = date.atStartOfDay(zoneId);
+        int utcOffsetHours = zdt.getOffset().getTotalSeconds() / 3600;
 
+        // Sunset calculation
+        double ssLatToHour = convLatToHour(dayOfYear, SunEvent.SUNSET);
+        double ssMeanAnomaly = meanAnomaly(ssLatToHour);
+        double ssTrueLong = calcTrueLong(ssMeanAnomaly);
+        double ssRA = calcRightAscension(ssTrueLong);
+        double ssLocalHour = sunsLocalHour(ssTrueLong, SunEvent.SUNSET);
+        double ssMeanTime = meanTimeOfSetting(ssRA, ssLocalHour, ssLatToHour);
+        double ssUtc = convToUTC(ssMeanTime);
+        double sunset = ssUtc + utcOffsetHours;
 
-		return L;
-	}
+        // Sunrise calculation
+        double srLatToHour = convLatToHour(dayOfYear, SunEvent.SUNRISE);
+        double srMeanAnomaly = meanAnomaly(srLatToHour);
+        double srTrueLong = calcTrueLong(srMeanAnomaly);
+        double srRA = calcRightAscension(srTrueLong);
+        double srLocalHour = sunsLocalHour(srTrueLong, SunEvent.SUNRISE);
+        double srMeanTime = meanTimeOfSetting(srRA, srLocalHour, srLatToHour);
+        double srUtc = convToUTC(srMeanTime);
+        double sunrise = srUtc + utcOffsetHours;
 
-	private double calcRightAscension(double trueLong) {
-		double rightAscension, lQuadrant, raQuadrant;
+        this.sunsetTime = decimalHoursToLocalTime(sunset);
+        this.sunriseTime = decimalHoursToLocalTime(sunrise);
 
-		rightAscension = (180/Math.PI) * Math.atan(0.91764 * Math.tan((Math.PI/180) * trueLong));
-		
-		if (rightAscension > 360.0) {
-			rightAscension  = rightAscension  - 360;
-		} else if (rightAscension  < 0) {
-			rightAscension  = rightAscension  + 360;
-		}
-	
-		
-		lQuadrant  = Math.floor( trueLong/90) * 90;
-		raQuadrant = Math.floor(rightAscension/90) * 90;
-		rightAscension = rightAscension + (lQuadrant - raQuadrant);
-		
-		rightAscension = rightAscension / 15;
-		return rightAscension;
-	}
+        logger.fine(() -> String.format("Calculated for %s: sunrise=%s, sunset=%s", date, sunriseTime, sunsetTime));
+    }
 
-	private double sunsLocalHour(double trueLong) {
-		double localHour;
-		double sinDec = 0.39782 * Math.sin((Math.PI/180) * trueLong);
-		double cosDec = Math.cos(Math.asin(sinDec));
-		double cosH = (Math.cos((Math.PI/180) * zenith) - (sinDec * Math.sin((Math.PI/180) * latitude))) / (cosDec * Math.cos((Math.PI/180) * latitude));
-	
-		if (debug) {
-			System.out.println("Sin Dec: " + sinDec);
-	
-			System.out.println("Cos Dec: " + cosDec);
-	
-			System.out.println("CosH: " + cosH);
-		}
-		localHour = (180/Math.PI) * Math.acos(cosH);
-		//sunrise
-		//localHour = 360 - (180/Math.PI) * Math.acos(cosH);
-		return localHour/15;
-	}
-	
-	private double SRsunsLocalHour(double trueLong) {
-		double localHour;
-		double sinDec = 0.39782 * Math.sin((Math.PI/180) * trueLong);
-		double cosDec = Math.cos(Math.asin(sinDec));
-		double cosH = (Math.cos((Math.PI/180) * zenith) - (sinDec * Math.sin((Math.PI/180) * latitude))) / (cosDec * Math.cos((Math.PI/180) * latitude));
-	
-		if (debug) {
-			System.out.println("Sin Dec: " + sinDec);
-	
-			System.out.println("Cos Dec: " + cosDec);
-	
-			System.out.println("CosH: " + cosH);
-		}
-		//sunrise
-		localHour = 360 - (180/Math.PI) * Math.acos(cosH);
-		return localHour/15;
-	}
+    public LocalTime getSunsetTime() {
+        return sunsetTime;
+    }
 
+    public LocalTime getSunriseTime() {
+        return sunriseTime;
+    }
 
-	private double meanTimeofSetting(double rightAscension, double localHour, double latToHour) {
-		 return (localHour + rightAscension - (0.06571 * latToHour) - 6.622);
+    public LocalDateTime getSunsetDateTime() {
+        return LocalDateTime.of(date, sunsetTime);
+    }
 
-	}
-	
-	private double convToUTC(double meanTimeofSetting) {
-		double utc;
-		utc = meanTimeofSetting - (longitude / 15);
-		if (utc > 24) {
-			utc = utc - 24;
-		} else if (utc < 0) {
-			utc = utc + 24;
-		}
-		
-		return utc;
-		
-	}
+    public LocalDateTime getSunriseDateTime() {
+        return LocalDateTime.of(date, sunriseTime);
+    }
+
+    // ── Private calculation methods ──────────────────────────────────────
+
+    private static LocalTime decimalHoursToLocalTime(double decimalHours) {
+        // Normalize to 0-24 range
+        while (decimalHours < 0) decimalHours += 24;
+        while (decimalHours >= 24) decimalHours -= 24;
+
+        int hour = (int) decimalHours;
+        int minute = (int) ((decimalHours - hour) * 60);
+        int second = (int) (((decimalHours - hour) * 3600) - minute * 60);
+        return LocalTime.of(hour, minute, second);
+    }
+
+    private static int dayOfTheYear(int month, int day, int year) {
+        int n1 = (int) Math.floor(275.0 * month / 9);
+        int n2 = (int) Math.floor((month + 9.0) / 12);
+        int n3 = (int) (1 + Math.floor((year - 4.0 * Math.floor(year / 4.0) + 2) / 3));
+        return n1 - (n2 * n3) + day - 30;
+    }
+
+    private double convLatToHour(int dayOfYear, SunEvent event) {
+        double hourAngle = (event == SunEvent.SUNSET) ? 18.0 : 6.0;
+        return dayOfYear + ((hourAngle - (longitude / 15)) / 24);
+    }
+
+    private static double meanAnomaly(double latToHour) {
+        return (0.9856 * latToHour) - 3.289;
+    }
+
+    private static double calcTrueLong(double meanAnomaly) {
+        double l = meanAnomaly
+                + (1.916 * Math.sin(Math.toRadians(meanAnomaly)))
+                + (0.020 * Math.sin(Math.toRadians(2 * meanAnomaly)))
+                + 282.634;
+
+        // Normalize to [0, 360)
+        if (l > 360.0) l -= 360;
+        else if (l < 0) l += 360;
+        return l;
+    }
+
+    private static double calcRightAscension(double trueLong) {
+        double ra = Math.toDegrees(Math.atan(0.91764 * Math.tan(Math.toRadians(trueLong))));
+
+        // Normalize to [0, 360)
+        if (ra > 360.0) ra -= 360;
+        else if (ra < 0) ra += 360;
+
+        // Adjust quadrant
+        double lQuadrant = Math.floor(trueLong / 90) * 90;
+        double raQuadrant = Math.floor(ra / 90) * 90;
+        ra += (lQuadrant - raQuadrant);
+
+        return ra / 15; // Convert to hours
+    }
+
+    private double sunsLocalHour(double trueLong, SunEvent event) {
+        double sinDec = 0.39782 * Math.sin(Math.toRadians(trueLong));
+        double cosDec = Math.cos(Math.asin(sinDec));
+        double cosH = (Math.cos(Math.toRadians(ZENITH))
+                - (sinDec * Math.sin(Math.toRadians(latitude))))
+                / (cosDec * Math.cos(Math.toRadians(latitude)));
+
+        double localHour = Math.toDegrees(Math.acos(cosH));
+        if (event == SunEvent.SUNRISE) {
+            localHour = 360 - localHour;
+        }
+        return localHour / 15;
+    }
+
+    private static double meanTimeOfSetting(double rightAscension, double localHour, double latToHour) {
+        return localHour + rightAscension - (0.06571 * latToHour) - 6.622;
+    }
+
+    private double convToUTC(double meanTime) {
+        double utc = meanTime - (longitude / 15);
+        if (utc > 24) utc -= 24;
+        else if (utc < 0) utc += 24;
+        return utc;
+    }
 }
