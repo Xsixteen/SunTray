@@ -26,3 +26,5 @@ target/
 
 gradlew
 gradlew.bat
+
+.settings/

@@ -1,6 +1,8 @@
 plugins {
     java
     application
+    eclipse
+    idea
 }
 
 group = "com.ericulicny"

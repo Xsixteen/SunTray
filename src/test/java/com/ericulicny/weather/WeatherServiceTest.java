@@ -1,10 +1,10 @@
 package com.ericulicny.weather;
 
 import com.ericulicny.domain.Weather;
+import com.ericulicny.sun.Location;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.util.Optional;
 
@@ -12,9 +12,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for WeatherService.
- * <p>
- * Integration tests that hit the real API are guarded by the presence of
- * the SUNTRAY_WEATHER_API_KEY environment variable.
  */
 class WeatherServiceTest {
 
@@ -23,55 +20,38 @@ class WeatherServiceTest {
     class ErrorHandling {
 
         @Test
-        @DisplayName("Returns empty when API key is invalid")
-        void invalidApiKeyReturnsEmpty() {
-            WeatherService service = new WeatherService("invalid-key-12345");
-            Optional<Weather> result = service.getTodaysWeather("berkley");
+        @DisplayName("Returns empty for out-of-bounds coordinates")
+        void invalidCoordinatesReturnEmpty() {
+            WeatherService service = new WeatherService();
+            // Invalid latitude (must be -90 to 90)
+            Optional<Weather> result = service.getTodaysWeather(new Location(100.0, 0.0));
 
-            assertTrue(result.isEmpty(), "Should return empty Optional for invalid API key");
-        }
-
-        @Test
-        @DisplayName("Returns empty when API key is blank")
-        void blankApiKeyReturnsEmpty() {
-            WeatherService service = new WeatherService("");
-            Optional<Weather> result = service.getTodaysWeather("berkley");
-
-            assertTrue(result.isEmpty(), "Should return empty Optional for blank API key");
-        }
-
-        @Test
-        @DisplayName("Returns empty for nonsense city name")
-        void nonsenseCityReturnsEmpty() {
-            WeatherService service = new WeatherService("fake-key");
-            Optional<Weather> result = service.getTodaysWeather("xyznonexistentcity12345");
-
-            assertTrue(result.isEmpty(), "Should return empty Optional for nonexistent city");
+            assertTrue(result.isEmpty(), "Should return empty Optional for invalid coordinates");
         }
 
         @Test
         @DisplayName("Does not throw exceptions on failure")
         void noExceptionsOnFailure() {
-            WeatherService service = new WeatherService("");
-            assertDoesNotThrow(() -> service.getTodaysWeather("berkley"),
+            WeatherService service = new WeatherService();
+            assertDoesNotThrow(() -> service.getTodaysWeather(new Location(100.0, 0.0)),
                     "Should handle errors gracefully without throwing");
         }
     }
 
     @Nested
     @DisplayName("Live API integration")
-    @EnabledIfEnvironmentVariable(named = "SUNTRAY_WEATHER_API_KEY", matches = ".+")
     class LiveApiTests {
 
-        private final WeatherService service = new WeatherService(
-                System.getenv("SUNTRAY_WEATHER_API_KEY"));
+        private final WeatherService service = new WeatherService();
+        // Berkley, MI coordinates
+        private final Location berkleyLocation = new Location(42.5031, -83.1835);
 
         @Test
-        @DisplayName("Fetches weather for a valid city")
-        void fetchValidCity() {
-            Optional<Weather> result = service.getTodaysWeather("berkley");
+        @DisplayName("Fetches weather for valid coordinates")
+        void fetchValidCoordinates() {
+            Optional<Weather> result = service.getTodaysWeather(berkleyLocation);
 
-            assertTrue(result.isPresent(), "Should return weather data for valid city");
+            assertTrue(result.isPresent(), "Should return weather data for valid coordinates");
 
             Weather weather = result.get();
             assertNotNull(weather.currentWeather(), "Current weather should not be null");
@@ -81,7 +61,7 @@ class WeatherServiceTest {
         @Test
         @DisplayName("Temperature values are in a reasonable Fahrenheit range")
         void temperatureRange() {
-            Optional<Weather> result = service.getTodaysWeather("berkley");
+            Optional<Weather> result = service.getTodaysWeather(berkleyLocation);
             assertTrue(result.isPresent());
 
             Weather weather = result.get();
@@ -95,7 +75,7 @@ class WeatherServiceTest {
         @Test
         @DisplayName("Wind speed is non-negative")
         void windSpeedNonNegative() {
-            Optional<Weather> result = service.getTodaysWeather("berkley");
+            Optional<Weather> result = service.getTodaysWeather(berkleyLocation);
             assertTrue(result.isPresent());
 
             Weather weather = result.get();
@@ -103,12 +83,17 @@ class WeatherServiceTest {
         }
 
         @Test
-        @DisplayName("Can fetch weather for multiple cities")
-        void multipleCities() {
-            String[] cities = {"New York", "London", "Tokyo"};
-            for (String city : cities) {
-                Optional<Weather> result = service.getTodaysWeather(city);
-                assertTrue(result.isPresent(), "Should return weather for " + city);
+        @DisplayName("Can fetch weather for multiple locations")
+        void multipleLocations() {
+            Location[] locations = {
+                    new Location(40.7128, -74.0060), // New York
+                    new Location(51.5074, -0.1278),  // London
+                    new Location(35.6762, 139.6503)  // Tokyo
+            };
+            
+            for (Location loc : locations) {
+                Optional<Weather> result = service.getTodaysWeather(loc);
+                assertTrue(result.isPresent(), "Should return weather for location: " + loc);
             }
         }
     }

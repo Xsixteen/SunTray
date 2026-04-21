@@ -49,7 +49,6 @@ public class SunTray {
 
     // Configuration
     private final Location location;
-    private final String weatherCity;
     private final WeatherService weatherService;
 
     // Tray icon images
@@ -88,22 +87,16 @@ public class SunTray {
     private final MenuItem maxTempItem = createDisabledItem("High Temp: ");
     private final MenuItem minTempItem = createDisabledItem("Low Temp: ");
     private final MenuItem windSpeedItem = createDisabledItem("Wind Speed: ");
+    private final MenuItem weatherLastUpdatedItem = createDisabledItem("Weather Last Updated: ");
 
     // ── Entry point ─────────────────────────────────────────────────────
 
     public static void main(String[] args) {
-        String apiKey = System.getenv("SUNTRAY_WEATHER_API_KEY");
-        if (apiKey == null || apiKey.isBlank()) {
-            logger.severe("Environment variable SUNTRAY_WEATHER_API_KEY is not set. Weather data will be unavailable.");
-            apiKey = "";
-        }
-
-        double lat = parseEnvDouble("SUNTRAY_LATITUDE", 42.5869);
-        double lon = parseEnvDouble("SUNTRAY_LONGITUDE", -82.9200);
-        String city = System.getenv().getOrDefault("SUNTRAY_WEATHER_CITY", "berkley");
+        double lat = parseEnvDouble("SUNTRAY_LATITUDE", 42.5031);
+        double lon = parseEnvDouble("SUNTRAY_LONGITUDE", -83.1835);
 
         Location location = new Location(lat, lon);
-        SunTray app = new SunTray(location, city, apiKey);
+        SunTray app = new SunTray(location);
         app.doUpdate();
 
         Timer pulse = new Timer(UPDATE_INTERVAL_MS, e -> app.doUpdate());
@@ -112,10 +105,9 @@ public class SunTray {
 
     // ── Constructor ─────────────────────────────────────────────────────
 
-    public SunTray(Location location, String weatherCity, String apiKey) {
+    public SunTray(Location location) {
         this.location = location;
-        this.weatherCity = weatherCity;
-        this.weatherService = new WeatherService(apiKey);
+        this.weatherService = new WeatherService();
 
         if (!SystemTray.isSupported()) {
             logger.severe("SystemTray is not supported on this platform");
@@ -154,7 +146,7 @@ public class SunTray {
             updateMaxMinDayLengths(today);
 
             // Fetch and display weather
-            Optional<Weather> weather = weatherService.getTodaysWeather(weatherCity);
+            Optional<Weather> weather = weatherService.getTodaysWeather(location);
             weather.ifPresent(this::updateWeatherDisplay);
 
             // Update tray icon based on sun/weather state
@@ -263,6 +255,7 @@ public class SunTray {
         maxTempItem.setLabel("Max Temp: " + weather.maxTempF() + "\u00B0F");
         minTempItem.setLabel("Min Temp: " + weather.minTempF() + "\u00B0F");
         windSpeedItem.setLabel("Wind Speed: " + weather.currentWind() + " mph");
+        weatherLastUpdatedItem.setLabel("Weather Last Updated: " + LocalTime.now().format(TIME_FORMAT));
     }
 
     // ── Icon management ─────────────────────────────────────────────────
@@ -317,6 +310,7 @@ public class SunTray {
         popup.add(maxTempItem);
         popup.add(minTempItem);
         popup.add(windSpeedItem);
+        popup.add(weatherLastUpdatedItem);
         popup.addSeparator();
 
         MenuItem exitItem = new MenuItem("Exit");

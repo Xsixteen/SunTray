@@ -1,6 +1,7 @@
 package com.ericulicny.weather;
 
 import com.ericulicny.domain.Weather;
+import com.ericulicny.sun.Location;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -15,33 +16,37 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Fetches current weather data from the OpenWeatherMap API.
+ * Fetches current weather data from the Open-Meteo API.
  */
 public class WeatherService {
 
     private static final Logger logger = Logger.getLogger(WeatherService.class.getName());
-    private static final String BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
+    private static final String BASE_URL = "https://api.open-meteo.com/v1/forecast";
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     private final HttpClient httpClient;
-    private final String apiKey;
 
-    public WeatherService(String apiKey) {
-        this.apiKey = apiKey;
+    public WeatherService() {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(TIMEOUT)
                 .build();
     }
 
     /**
-     * Fetches the current weather for the given city.
+     * Fetches the current weather for the given location.
      *
-     * @param city the city name to query
+     * @param location the location to query
      * @return the weather data, or empty if the request failed
      */
-    public Optional<Weather> getTodaysWeather(String city) {
+    public Optional<Weather> getTodaysWeather(Location location) {
         try {
-            URI uri = URI.create(BASE_URL + "?q=" + java.net.URLEncoder.encode(city, java.nio.charset.StandardCharsets.UTF_8) + "&appid=" + apiKey);
+            String urlString = String.format("%s?latitude=%f&longitude=%f" +
+                    "&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation" +
+                    "&daily=temperature_2m_max,temperature_2m_min" +
+                    "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=mm&timezone=auto",
+                    BASE_URL, location.latitude(), location.longitude());
+
+            URI uri = URI.create(urlString);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
                     .timeout(TIMEOUT)
@@ -57,27 +62,35 @@ public class WeatherService {
             }
 
             JSONObject obj = new JSONObject(response.body());
-            double currentTempK = obj.getJSONObject("main").getDouble("temp");
-            double maxTempK = obj.getJSONObject("main").getDouble("temp_max");
-            double minTempK = obj.getJSONObject("main").getDouble("temp_min");
-            double windSpeed = obj.getJSONObject("wind").getDouble("speed");
-
+            
+            JSONObject current = obj.getJSONObject("current");
+            double currentTemp = current.getDouble("temperature_2m");
+            int weatherCode = current.getInt("weather_code");
+            double windSpeed = current.getDouble("wind_speed_10m");
+            double precipitation = current.getDouble("precipitation");
+            
             int gustWind = 0;
             try {
-                gustWind = (int) Math.round(windMeterToMph(obj.getJSONObject("wind").getDouble("gust")));
+                if (!current.isNull("wind_gusts_10m")) {
+                    gustWind = (int) Math.round(current.getDouble("wind_gusts_10m"));
+                }
             } catch (JSONException ignored) {
-                // Gust data is optional in the API response
+                // Gust data is optional
             }
 
-            String conditions = obj.getJSONArray("weather").getJSONObject(0).getString("main");
+            JSONObject daily = obj.getJSONObject("daily");
+            double maxTemp = daily.getJSONArray("temperature_2m_max").getDouble(0);
+            double minTemp = daily.getJSONArray("temperature_2m_min").getDouble(0);
+
+            String conditions = mapWeatherCodeToCondition(weatherCode);
 
             Weather weather = new Weather(
-                    convKtoF(currentTempK),
-                    convKtoF(maxTempK),
-                    convKtoF(minTempK),
+                    Math.round(currentTemp),
+                    Math.round(maxTemp),
+                    Math.round(minTemp),
                     conditions,
-                    0.0, // precipitation not available in basic endpoint
-                    (int) Math.round(windMeterToMph(windSpeed)),
+                    precipitation,
+                    (int) Math.round(windSpeed),
                     gustWind
             );
 
@@ -86,7 +99,7 @@ public class WeatherService {
 
             return Optional.of(weather);
 
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException | InterruptedException | JSONException e) {
             logger.log(Level.WARNING, "Failed to fetch weather data", e);
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -95,11 +108,16 @@ public class WeatherService {
         }
     }
 
-    private static long convKtoF(double kelvin) {
-        return Math.round((kelvin - 273.15) * 9.0 / 5.0 + 32);
-    }
-
-    private static double windMeterToMph(double windSpeed) {
-        return windSpeed * 2.23694;
+    private static String mapWeatherCodeToCondition(int code) {
+        if (code == 0) return "Clear";
+        if (code == 1 || code == 2 || code == 3) return "Cloudy";
+        if (code == 45 || code == 48) return "Fog";
+        if (code >= 51 && code <= 57) return "Drizzle";
+        if (code >= 61 && code <= 67) return "Rain";
+        if (code >= 71 && code <= 77) return "Snow";
+        if (code >= 80 && code <= 82) return "Rain Showers";
+        if (code >= 85 && code <= 86) return "Snow Showers";
+        if (code >= 95 && code <= 99) return "Thunderstorm";
+        return "Unknown";
     }
 }
