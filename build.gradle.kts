@@ -74,6 +74,22 @@ tasks.register<Exec>("jpackage") {
         "--app-version", version.toString(),
         "--vendor", "Eric Ulicny Software",
         "--mac-package-identifier", "com.ericulicny.suntray",
-        "--java-options", "-Xms128m"
+        "--java-options", "-Xms128m -Dapple.awt.UIElement=true"
     )
+
+    // Inject LSUIElement into the generated Info.plist so macOS hides the Dock icon
+    doLast {
+        val plist = File(outputDir, "SunTray.app/Contents/Info.plist")
+        if (plist.exists()) {
+            val content = plist.readText()
+            if (!content.contains("LSUIElement")) {
+                val patched = content.replace(
+                    "</dict>",
+                    "  <key>LSUIElement</key>\n  <true/>\n</dict>"
+                )
+                plist.writeText(patched)
+                logger.lifecycle("Injected LSUIElement into ${plist.absolutePath}")
+            }
+        }
+    }
 }

@@ -53,6 +53,8 @@ public class SunTray {
 
     // Tray icon images
     private final Image sunIcon = loadIcon("sun-icon-md.png");
+    private final Image sunPlusIcon = loadIcon("sun-plus.png");
+    private final Image sunMinusIcon = loadIcon("sun-minus.png");
     private final Image moonIcon = loadIcon("full-moon-icon-md.png");
     private final Image snowIcon = loadIcon("snowflake-icon.png");
     private final Image rainIcon = loadIcon("raindrop-icon.png");
@@ -63,6 +65,7 @@ public class SunTray {
     // Current state
     private LocalTime sunsetTime;
     private LocalTime sunriseTime;
+    private boolean positiveTimeDelta;
 
     // Menu items — sun data
     private final MenuItem sunsetItem = createDisabledItem("Sunset: ");
@@ -92,6 +95,9 @@ public class SunTray {
     // ── Entry point ─────────────────────────────────────────────────────
 
     public static void main(String[] args) {
+        // Hide the Dock icon — must be set before AWT toolkit initializes
+        System.setProperty("apple.awt.UIElement", "true");
+
         double lat = parseEnvDouble("SUNTRAY_LATITUDE", 42.5031);
         double lon = parseEnvDouble("SUNTRAY_LONGITUDE", -83.1835);
 
@@ -180,7 +186,7 @@ public class SunTray {
         long minutes = Math.abs(delta.toMinutesPart());
 
         String prefix = hasSunSet() ? "Time since Sunset: " : "Time until Sunset: ";
-        timeToItem.setLabel(prefix + hours + " hour and " + minutes + " minutes");
+        timeToItem.setLabel(prefix + hours + " hour & " + minutes + " minutes");
     }
 
     private void updateTomorrowSunrise(LocalDate today) {
@@ -200,10 +206,11 @@ public class SunTray {
         Duration todayLength = Duration.between(currentSun.getSunriseDateTime(), currentSun.getSunsetDateTime());
         Duration tomorrowLength = Duration.between(tomorrowSun.getSunriseDateTime(), tomorrowSun.getSunsetDateTime());
         Duration delta = tomorrowLength.minus(todayLength);
+        positiveTimeDelta = !delta.isNegative();
 
         long minutes = delta.toMinutes();
         long seconds = Math.abs(delta.toSecondsPart());
-        tomorrowDeltaItem.setLabel("Tomorrow Time Delta: " + minutes + " min and " + seconds + " sec");
+        tomorrowDeltaItem.setLabel("Tomorrow Time Delta: " + minutes + " min & " + seconds + " seconds");
     }
 
     // ── Day length ──────────────────────────────────────────────────────
@@ -212,7 +219,7 @@ public class SunTray {
         Duration duration = Duration.between(sunrise, sunset);
         long hours = duration.toHours();
         long minutes = duration.toMinutesPart();
-        menuItem.setLabel(label + hours + " hours and " + minutes + " minutes");
+        menuItem.setLabel(label + hours + " hours & " + minutes + " minutes");
     }
 
     private void updateMaxMinDayLengths(LocalDate today) {
@@ -264,7 +271,11 @@ public class SunTray {
         if (hasSunSet() || !hasSunRisen()) {
             trayIcon.setImage(moonIcon);
         } else {
-            trayIcon.setImage(sunIcon);
+            if (positiveTimeDelta) {
+                trayIcon.setImage(sunPlusIcon);
+            } else {
+                trayIcon.setImage(sunMinusIcon);
+            }
         }
 
         if (weather != null) {
