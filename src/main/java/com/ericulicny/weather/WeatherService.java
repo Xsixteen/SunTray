@@ -42,7 +42,7 @@ public class WeatherService {
         try {
             String urlString = String.format("%s?latitude=%f&longitude=%f" +
                     "&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation" +
-                    "&daily=temperature_2m_max,temperature_2m_min" +
+                    "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max" +
                     "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=mm&timezone=auto",
                     BASE_URL, location.latitude(), location.longitude());
 
@@ -81,6 +81,9 @@ public class WeatherService {
             JSONObject daily = obj.getJSONObject("daily");
             double maxTemp = daily.getJSONArray("temperature_2m_max").getDouble(0);
             double minTemp = daily.getJSONArray("temperature_2m_min").getDouble(0);
+            double precipSumMM = daily.getJSONArray("precipitation_sum").getDouble(0);
+            double precipSumInches = precipSumMM / 25.4;
+            int precipProbability = daily.getJSONArray("precipitation_probability_max").getInt(0);
 
             String conditions = mapWeatherCodeToCondition(weatherCode);
 
@@ -91,7 +94,9 @@ public class WeatherService {
                     conditions,
                     precipitation,
                     (int) Math.round(windSpeed),
-                    gustWind
+                    gustWind,
+                    precipSumInches,
+                    precipProbability
             );
 
             logger.info(String.format("Weather: current=%d°F, max=%d°F, min=%d°F, conditions=%s",

@@ -22,9 +22,11 @@ import java.util.logging.Logger;
 
 import javax.swing.Timer;
 
+import com.ericulicny.domain.GeoLocation;
 import com.ericulicny.domain.Weather;
 import com.ericulicny.sun.Location;
 import com.ericulicny.sun.Sun;
+import com.ericulicny.weather.GeoLocationService;
 import com.ericulicny.weather.WeatherService;
 
 /**
@@ -67,6 +69,9 @@ public class SunTray {
     private LocalTime sunriseTime;
     private boolean positiveTimeDelta;
 
+    // Menu items — location
+    private final MenuItem locationItem = createDisabledItem("Location: ");
+
     // Menu items — sun data
     private final MenuItem sunsetItem = createDisabledItem("Sunset: ");
     private final MenuItem sunriseItem = createDisabledItem("Sunrise: ");
@@ -90,6 +95,8 @@ public class SunTray {
     private final MenuItem maxTempItem = createDisabledItem("High Temp: ");
     private final MenuItem minTempItem = createDisabledItem("Low Temp: ");
     private final MenuItem windSpeedItem = createDisabledItem("Wind Speed: ");
+    private final MenuItem precipSumItem = createDisabledItem("Precipitation Sum: ");
+    private final MenuItem precipProbItem = createDisabledItem("Precipitation Probability: ");
     private final MenuItem weatherLastUpdatedItem = createDisabledItem("Weather Last Updated: ");
 
     // ── Entry point ─────────────────────────────────────────────────────
@@ -98,11 +105,24 @@ public class SunTray {
         // Hide the Dock icon — must be set before AWT toolkit initializes
         System.setProperty("apple.awt.UIElement", "true");
 
-        double lat = parseEnvDouble("SUNTRAY_LATITUDE", 42.5031);
-        double lon = parseEnvDouble("SUNTRAY_LONGITUDE", -83.1835);
+        // Try IP-based geolocation first, fall back to env vars
+        GeoLocationService geoService = new GeoLocationService();
+        Optional<GeoLocation> detected = geoService.detect();
 
-        Location location = new Location(lat, lon);
-        SunTray app = new SunTray(location);
+        Location location;
+        String cityState;
+        if (detected.isPresent()) {
+            GeoLocation geo = detected.get();
+            location = geo.toLocation();
+            cityState = geo.city() + ", " + geo.state();
+        } else {
+            double lat = parseEnvDouble("SUNTRAY_LATITUDE", 42.5031);
+            double lon = parseEnvDouble("SUNTRAY_LONGITUDE", -83.1835);
+            location = new Location(lat, lon);
+            cityState = "Unknown";
+        }
+
+        SunTray app = new SunTray(location, cityState);
         app.doUpdate();
 
         Timer pulse = new Timer(UPDATE_INTERVAL_MS, e -> app.doUpdate());
@@ -111,9 +131,10 @@ public class SunTray {
 
     // ── Constructor ─────────────────────────────────────────────────────
 
-    public SunTray(Location location) {
+    public SunTray(Location location, String cityState) {
         this.location = location;
         this.weatherService = new WeatherService();
+        locationItem.setLabel("\uD83D\uDCCD " + cityState);
 
         if (!SystemTray.isSupported()) {
             logger.severe("SystemTray is not supported on this platform");
@@ -262,6 +283,8 @@ public class SunTray {
         maxTempItem.setLabel("Max Temp: " + weather.maxTempF() + "\u00B0F");
         minTempItem.setLabel("Min Temp: " + weather.minTempF() + "\u00B0F");
         windSpeedItem.setLabel("Wind Speed: " + weather.currentWind() + " mph");
+        precipSumItem.setLabel("Precipitation Sum: " + String.format("%.2f", weather.precipitationSumInches()) + " in");
+        precipProbItem.setLabel("Precipitation Probability: " + weather.precipitationProbabilityPct() + "%");
         weatherLastUpdatedItem.setLabel("Weather Last Updated: " + LocalTime.now().format(TIME_FORMAT));
     }
 
@@ -301,6 +324,8 @@ public class SunTray {
     private PopupMenu buildMenu() {
         PopupMenu popup = new PopupMenu();
 
+        popup.add(locationItem);
+        popup.addSeparator();
         popup.add(sunsetItem);
         popup.add(sunriseItem);
         popup.add(dayLengthItem);
@@ -321,6 +346,8 @@ public class SunTray {
         popup.add(maxTempItem);
         popup.add(minTempItem);
         popup.add(windSpeedItem);
+        popup.add(precipSumItem);
+        popup.add(precipProbItem);
         popup.add(weatherLastUpdatedItem);
         popup.addSeparator();
 

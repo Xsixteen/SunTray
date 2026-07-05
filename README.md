@@ -15,7 +15,6 @@ SunTray is configured via environment variables:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SUNTRAY_WEATHER_API_KEY` | **Yes** | — | OpenWeatherMap API key |
 | `SUNTRAY_LATITUDE` | No | `42.5869` | Location latitude |
 | `SUNTRAY_LONGITUDE` | No | `-82.9200` | Location longitude |
 | `SUNTRAY_WEATHER_CITY` | No | `berkley` | City name for weather API |

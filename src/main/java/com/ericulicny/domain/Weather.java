@@ -10,5 +10,7 @@ public record Weather(
         String currentWeather,
         double currentPrecipMM,
         int currentWind,
-        int gustWind
+        int gustWind,
+        double precipitationSumInches,
+        int precipitationProbabilityPct
 ) {}
