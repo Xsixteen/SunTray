@@ -1,8 +1,30 @@
+# Gradle
+/.gradle/
+/build/
+
+# Legacy
 /dist/
-*.iml
-*.class
+/bin/
 /release/
+
+# IDE
+*.iml
+.idea/
+
+# OS
 *.DS_Store
 Thumbs.db
-*.idea
-/target/
+
+# JAVA
+*.class
+*.jar
+*.lst  
+target/
+
+# IDE
+.vscode/
+
+gradlew
+gradlew.bat
+
+.settings/
