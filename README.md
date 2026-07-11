@@ -4,6 +4,7 @@ A macOS system tray application that displays sunrise/sunset times, seasonal cou
 
 Icons from: <a href="https://www.flaticon.com/free-icons/drop" title="drop icons">Drop icons created by Pixel perfect - Flaticon</a>
 
+![screenshot](assets/SunTray-screenshot.png)
 ## Requirements
 
 - Java 21+

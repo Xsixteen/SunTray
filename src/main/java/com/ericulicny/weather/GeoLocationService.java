@@ -31,7 +31,8 @@ public class GeoLocationService {
     }
 
     /**
-     * Attempts to determine the current geographic location from the public IP address.
+     * Attempts to determine the current geographic location from the public IP
+     * address.
      *
      * @return the resolved location, or empty if the request failed
      */
